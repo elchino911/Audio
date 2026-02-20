@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Audio Receiver</string>
+    <string name="title">Windows -&gt; Android Audio</string>
+    <string name="port_label">UDP port</string>
+    <string name="jitter_label">Target jitter (ms)</string>
+    <string name="start">Start</string>
+    <string name="stop">Stop</string>
+    <string name="status_idle">Status: idle</string>
+    <string name="status_running">Status: running</string>
+</resources>

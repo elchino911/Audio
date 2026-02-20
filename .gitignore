@@ -1,0 +1,8 @@
+# Rust
+windows-sender/target/
+
+# Android/Gradle
+android-receiver/.gradle/
+android-receiver/local.properties
+android-receiver/**/build/
+*.apk
