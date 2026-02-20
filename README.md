@@ -1,65 +1,103 @@
 # Audio Link (Windows -> Android)
 
-MVP de streaming de audio de baja latencia para uso diario.
+Streaming de audio de baja latencia para uso diario personal.
 
-## Estado actual
+## Estado v1 personal
 
-- `windows-sender`: funcional en Rust, envia audio PCM16LE por UDP.
-- `android-receiver`: app Android (Kotlin) que recibe UDP, aplica jitter buffer y reproduce con `AudioTrack`.
-- Protocolo propio de paquetes con `seq` y `timestamp`.
-
-Nota: esta v1 usa `cpal` en Windows, por lo que captura **entrada por defecto (microfono/line-in)**. El siguiente paso es cambiar a WASAPI loopback para capturar audio del sistema.
+- `windows-sender` (Rust): captura `desktop` (WASAPI loopback) o `mic`.
+- `android-receiver` (Kotlin): recibe y reproduce audio con jitter buffer adaptativo.
+- Transportes soportados:
+  - `udp` para LAN.
+  - `tcp` para LAN o USB (`adb forward`).
 
 ## Estructura
 
-- `windows-sender/` emisor CLI en Rust
-- `android-receiver/` app receptor Android
+- `windows-sender/`: emisor CLI en Rust.
+- `android-receiver/`: app receptor Android.
+- `tools/launcher/`: scripts de inicio/parada 1 clic.
+- `tools/release/`: script de empaquetado.
+- `tools/audio-report/`: pruebas y reportes.
 
-## Protocolo UDP (v1)
+## Uso normal (red LAN)
 
-Header fijo de 28 bytes + payload PCM16LE:
-
-1. magic `AUD0` (4 bytes)
-2. version `1` (u8)
-3. codec `0 = PCM16LE` (u8)
-4. channels (u8)
-5. reserved (u8)
-6. sample_rate (u32 LE)
-7. seq (u32 LE)
-8. send_time_us (u64 LE, unix micros)
-9. samples_per_channel (u16 LE)
-10. payload_len (u16 LE)
-
-## Uso rapido
-
-### 1) Android receiver
-
-1. Abre `android-receiver` en Android Studio.
-2. Ejecuta la app en tu telefono.
-3. Ingresa puerto (por defecto `50000`) y jitter objetivo (por defecto `20 ms`).
-4. Pulsa `Start`.
-
-### 2) Windows sender
-
-Compila y ejecuta:
+1. En Android abre la app y pulsa `Start` (port/jitter/transport).
+2. En Windows:
 
 ```powershell
 cd windows-sender
-cargo run --release -- --target-ip <IP_DEL_ANDROID> --port 50000 --frame-ms 5
+cargo run --release -- --target-ip 192.168.100.49 --port 50000 --frame-ms 5 --transport udp --source desktop
 ```
 
-Ejemplo:
+Para microfono:
 
 ```powershell
-cargo run --release -- --target-ip 192.168.0.45 --port 50000 --frame-ms 5
+cargo run --release -- --target-ip 192.168.100.49 --port 50000 --frame-ms 5 --transport udp --source mic
 ```
 
-## USB tethering
+## Uso por USB (sin depender de Wi-Fi)
 
-Activa "USB tethering" en Android y usa la IP de la interfaz tether. El protocolo es el mismo (UDP), solo cambia la red.
+1. Conecta Android por USB con ADB activo.
+2. Crea forward:
 
-## Siguientes pasos recomendados
+```powershell
+adb -s <serial> forward tcp:50000 tcp:50000
+```
 
-1. Cambiar PCM por Opus (5 ms, FEC) para menor ancho de banda.
-2. Migrar captura Windows a WASAPI loopback (audio del sistema).
-3. Añadir cifrado y descubrimiento de peers.
+3. Inicia receiver en Android con `transport=tcp` (desde app o ADB).
+4. Ejecuta sender hacia loopback local:
+
+```powershell
+cd windows-sender
+cargo run --release -- --target-ip 127.0.0.1 --port 50000 --frame-ms 5 --transport tcp --source desktop
+```
+
+## Arranque/parada 1 clic
+
+Modo red:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\launcher\start-audio-link.ps1 -Mode network -TargetIp 192.168.100.49 -Source desktop -JitterMs 20
+```
+
+Modo USB:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\launcher\start-audio-link.ps1 -Mode usb -DeviceSerial 344b5d65 -Source desktop -JitterMs 20
+```
+
+Nota: en `-Mode usb` el launcher activa auto-reconexion por defecto (watchdog en segundo plano).
+Log del watchdog: `tools/launcher/.runtime/watchdog.log`.
+
+Parar:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\launcher\stop-audio-link.ps1
+```
+
+## Empaquetado release
+
+Genera carpeta `dist/audio-link-v1-personal-...` con `windows-sender.exe`, APK y scripts:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\release\package-release.ps1
+```
+
+Opcional (firmar APK release si pasas keystore):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\release\package-release.ps1 `
+  -AndroidBuildType release `
+  -KeystorePath C:\keys\my-release.jks `
+  -KeystoreAlias myalias `
+  -KeystorePassword "secret"
+```
+
+## Parametros clave (sender)
+
+- `--target-ip`: IP destino (`127.0.0.1` si usas USB + `adb forward`).
+- `--port`: puerto receptor.
+- `--frame-ms`: 1..20 ms por paquete. Menor latencia, mayor sensibilidad.
+- `--transport`: `udp` o `tcp`.
+- `--source`: `desktop` o `mic`.
+- `--desktop-device`: nombre exacto del dispositivo de salida para loopback.
+- `--list-desktop-devices`: lista dispositivos render disponibles.

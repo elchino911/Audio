@@ -2,8 +2,9 @@
 <resources>
     <string name="app_name">Audio Receiver</string>
     <string name="title">Windows -&gt; Android Audio</string>
-    <string name="port_label">UDP port</string>
+    <string name="port_label">Port</string>
     <string name="jitter_label">Target jitter (ms)</string>
+    <string name="transport_label">Transport (udp/tcp)</string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
     <string name="status_idle">Status: idle</string>
