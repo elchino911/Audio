@@ -7,6 +7,7 @@ data class AudioPacket(
     val sampleRate: Int,
     val channels: Int,
     val seq: Long,
+    val sendTimeUs: Long,
     val samplesPerChannel: Int,
     val payload: ShortArray
 ) {
@@ -31,7 +32,7 @@ data class AudioPacket(
             val bb = ByteBuffer.wrap(packetBytes, 8, packetLen - 8).order(ByteOrder.LITTLE_ENDIAN)
             val sampleRate = bb.int
             val seq = bb.int.toLong() and 0xFFFF_FFFFL
-            bb.long // send_time_us, unused in this MVP
+            val sendTimeUs = bb.long
             val samplesPerChannel = bb.short.toInt() and 0xFFFF
             val payloadLen = bb.short.toInt() and 0xFFFF
 
@@ -53,6 +54,7 @@ data class AudioPacket(
                 sampleRate = sampleRate,
                 channels = channels,
                 seq = seq,
+                sendTimeUs = sendTimeUs,
                 samplesPerChannel = samplesPerChannel,
                 payload = pcm
             )

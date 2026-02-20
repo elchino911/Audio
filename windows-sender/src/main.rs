@@ -1,17 +1,30 @@
 use std::collections::VecDeque;
 use std::net::{SocketAddr, UdpSocket};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{SampleFormat, StreamConfig};
-use crossbeam_channel::{bounded, Receiver, Sender};
+use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
 
 const MAGIC: [u8; 4] = *b"AUD0";
 const VERSION: u8 = 1;
 const CODEC_PCM16: u8 = 0;
 const HEADER_SIZE: usize = 28;
+
+#[derive(Default)]
+struct SenderStats {
+    captured_chunks: AtomicU64,
+    captured_samples: AtomicU64,
+    capture_drops: AtomicU64,
+    sent_packets: AtomicU64,
+    sent_bytes: AtomicU64,
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Low-latency UDP audio sender (Windows -> Android)")]
@@ -57,15 +70,18 @@ fn main() -> Result<()> {
         sample_rate, channels, sample_format, args.frame_ms, samples_per_channel
     );
     println!("Target: {target}");
+    println!("Stats: one line per second (pps/kbps/drops/backlog)");
 
-    let (tx, rx) = bounded::<Vec<i16>>(128);
-    let stream = build_input_stream(&device, &config, sample_format, tx)?;
+    let (tx, rx) = bounded::<Vec<i16>>(512);
+    let stats = Arc::new(SenderStats::default());
+    let stream = build_input_stream(&device, &config, sample_format, tx, Arc::clone(&stats))?;
     stream.play().context("failed to start input stream")?;
 
     let socket = UdpSocket::bind("0.0.0.0:0").context("failed to bind UDP sender socket")?;
     socket
         .set_nonblocking(false)
         .context("failed to configure UDP socket")?;
+    let _stats_thread = spawn_stats_logger(Arc::clone(&stats), rx.clone(), args.frame_ms);
 
     send_loop(
         &socket,
@@ -75,6 +91,7 @@ fn main() -> Result<()> {
         channels as u8,
         samples_per_channel as u16,
         samples_per_packet,
+        stats,
     )
 }
 
@@ -86,6 +103,7 @@ fn send_loop(
     channels: u8,
     samples_per_channel: u16,
     samples_per_packet: usize,
+    stats: Arc<SenderStats>,
 ) -> Result<()> {
     let mut seq: u32 = 0;
     let mut acc = VecDeque::<i16>::with_capacity(samples_per_packet * 4);
@@ -115,6 +133,10 @@ fn send_loop(
             socket
                 .send_to(&packet, target)
                 .with_context(|| format!("failed to send UDP packet seq={seq}"))?;
+            stats.sent_packets.fetch_add(1, Ordering::Relaxed);
+            stats
+                .sent_bytes
+                .fetch_add(packet.len() as u64, Ordering::Relaxed);
             seq = seq.wrapping_add(1);
         }
     }
@@ -156,6 +178,7 @@ fn build_input_stream(
     config: &StreamConfig,
     sample_format: SampleFormat,
     tx: Sender<Vec<i16>>,
+    stats: Arc<SenderStats>,
 ) -> Result<cpal::Stream> {
     let err_fn = |err| eprintln!("cpal stream error: {err}");
 
@@ -163,7 +186,18 @@ fn build_input_stream(
         SampleFormat::I16 => device.build_input_stream(
             config,
             move |data: &[i16], _| {
-                let _ = tx.try_send(data.to_vec());
+                stats
+                    .captured_samples
+                    .fetch_add(data.len() as u64, Ordering::Relaxed);
+                match tx.try_send(data.to_vec()) {
+                    Ok(_) => {
+                        stats.captured_chunks.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(TrySendError::Full(_)) => {
+                        stats.capture_drops.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(TrySendError::Disconnected(_)) => {}
+                }
             },
             err_fn,
             None,
@@ -171,11 +205,22 @@ fn build_input_stream(
         SampleFormat::U16 => device.build_input_stream(
             config,
             move |data: &[u16], _| {
+                stats
+                    .captured_samples
+                    .fetch_add(data.len() as u64, Ordering::Relaxed);
                 let converted = data
                     .iter()
                     .map(|s| (*s as i32 - 32768) as i16)
                     .collect::<Vec<i16>>();
-                let _ = tx.try_send(converted);
+                match tx.try_send(converted) {
+                    Ok(_) => {
+                        stats.captured_chunks.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(TrySendError::Full(_)) => {
+                        stats.capture_drops.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(TrySendError::Disconnected(_)) => {}
+                }
             },
             err_fn,
             None,
@@ -183,6 +228,9 @@ fn build_input_stream(
         SampleFormat::F32 => device.build_input_stream(
             config,
             move |data: &[f32], _| {
+                stats
+                    .captured_samples
+                    .fetch_add(data.len() as u64, Ordering::Relaxed);
                 let converted = data
                     .iter()
                     .map(|s| {
@@ -190,7 +238,15 @@ fn build_input_stream(
                         (clamped * i16::MAX as f32) as i16
                     })
                     .collect::<Vec<i16>>();
-                let _ = tx.try_send(converted);
+                match tx.try_send(converted) {
+                    Ok(_) => {
+                        stats.captured_chunks.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(TrySendError::Full(_)) => {
+                        stats.capture_drops.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(TrySendError::Disconnected(_)) => {}
+                }
             },
             err_fn,
             None,
@@ -199,4 +255,46 @@ fn build_input_stream(
     };
 
     Ok(stream)
+}
+
+fn spawn_stats_logger(
+    stats: Arc<SenderStats>,
+    rx: Receiver<Vec<i16>>,
+    frame_ms: u32,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let mut last_chunks = 0_u64;
+        let mut last_samples = 0_u64;
+        let mut last_drops = 0_u64;
+        let mut last_packets = 0_u64;
+        let mut last_bytes = 0_u64;
+
+        loop {
+            thread::sleep(Duration::from_secs(1));
+            let chunks = stats.captured_chunks.load(Ordering::Relaxed);
+            let samples = stats.captured_samples.load(Ordering::Relaxed);
+            let drops = stats.capture_drops.load(Ordering::Relaxed);
+            let packets = stats.sent_packets.load(Ordering::Relaxed);
+            let bytes = stats.sent_bytes.load(Ordering::Relaxed);
+
+            let d_chunks = chunks.saturating_sub(last_chunks);
+            let d_samples = samples.saturating_sub(last_samples);
+            let d_drops = drops.saturating_sub(last_drops);
+            let d_packets = packets.saturating_sub(last_packets);
+            let d_bytes = bytes.saturating_sub(last_bytes);
+            let kbps = (d_bytes as f64 * 8.0) / 1000.0;
+            let queue_backlog = rx.len();
+
+            println!(
+                "stats frame={}ms tx={}pps {:.1}kbps cap={}chunks/s {}samples/s drop={} q={}",
+                frame_ms, d_packets, kbps, d_chunks, d_samples, d_drops, queue_backlog
+            );
+
+            last_chunks = chunks;
+            last_samples = samples;
+            last_drops = drops;
+            last_packets = packets;
+            last_bytes = bytes;
+        }
+    })
 }
