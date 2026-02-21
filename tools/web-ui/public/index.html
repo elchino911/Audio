@@ -99,7 +99,12 @@
             </select>
           </label>
           <label>Desktop Device
-            <input id="downDesktopDevice" type="text" placeholder="(opcional)" />
+            <div class="field-row">
+              <select id="downDesktopDevice">
+                <option value="">(default output)</option>
+              </select>
+              <button id="btnRefreshDownDesktopDevices" type="button" class="ghost">Reload</button>
+            </div>
           </label>
         </div>
       </article>

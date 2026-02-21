@@ -455,6 +455,96 @@ function Read-LogTail {
     return (Get-Content $Path -Tail $Tail | Out-String)
 }
 
+function Resolve-CargoExeOrNull {
+    $cmd = Get-Command "cargo" -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    $fallback = Join-Path $env:USERPROFILE ".cargo\bin\cargo.exe"
+    if (Test-Path $fallback) { return $fallback }
+    return $null
+}
+
+function Invoke-ProcessCapture {
+    param(
+        [string]$FilePath,
+        [string[]]$ArgumentList = @(),
+        [string]$WorkingDirectory = ""
+    )
+    $tmpDir = [System.IO.Path]::GetTempPath()
+    $stdoutPath = Join-Path $tmpDir ("proc-out-{0}.log" -f ([System.Guid]::NewGuid().ToString("N")))
+    $stderrPath = Join-Path $tmpDir ("proc-err-{0}.log" -f ([System.Guid]::NewGuid().ToString("N")))
+    try {
+        $startParams = @{
+            FilePath = $FilePath
+            ArgumentList = $ArgumentList
+            PassThru = $true
+            Wait = $true
+            WindowStyle = "Hidden"
+            RedirectStandardOutput = $stdoutPath
+            RedirectStandardError = $stderrPath
+        }
+        if ($WorkingDirectory) {
+            $startParams.WorkingDirectory = $WorkingDirectory
+        }
+        $proc = Start-Process @startParams
+        $stdout = if (Test-Path $stdoutPath) { Get-Content $stdoutPath -ErrorAction SilentlyContinue } else { @() }
+        $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -ErrorAction SilentlyContinue } else { @() }
+        return @{
+            ExitCode = $proc.ExitCode
+            StdOut = ($stdout | Out-String)
+            StdErr = ($stderr | Out-String)
+            Output = (@($stdout + $stderr) | Out-String)
+        }
+    } finally {
+        if (Test-Path $stdoutPath) { Remove-Item $stdoutPath -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $stderrPath) { Remove-Item $stderrPath -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+function Get-DownlinkDesktopDevices {
+    param([string]$WorkspacePath)
+    $senderDir = Join-Path $WorkspacePath "windows-sender"
+    if (-not (Test-Path $senderDir)) {
+        throw "No existe windows-sender en $WorkspacePath"
+    }
+    $senderExe = Join-Path $senderDir "target\release\windows-sender.exe"
+    if (-not (Test-Path $senderExe)) {
+        $cargoExe = Resolve-CargoExeOrNull
+        if (-not $cargoExe) {
+            throw "No se encontro windows-sender.exe ni cargo para compilarlo."
+        }
+        $buildResult = Invoke-ProcessCapture -FilePath $cargoExe -ArgumentList @("build", "--release") -WorkingDirectory $senderDir
+        if ([int]$buildResult.ExitCode -ne 0 -or -not (Test-Path $senderExe)) {
+            throw "No se pudo compilar windows-sender (--release):`n$($buildResult.Output)"
+        }
+    }
+
+    $probe = Invoke-ProcessCapture -FilePath $senderExe -ArgumentList @("--list-desktop-devices") -WorkingDirectory $senderDir
+    if ([int]$probe.ExitCode -ne 0) {
+        throw "Fallo al listar dispositivos desktop:`n$($probe.Output)"
+    }
+
+    $devices = New-Object System.Collections.Generic.List[object]
+    $lines = ($probe.StdOut -split "`r?`n")
+    foreach ($lineRaw in $lines) {
+        $line = "$lineRaw".Trim()
+        if ($line -match '^\*\s+(.+?)(\s+\[default\])?$') {
+            $name = "$($Matches[1])".Trim()
+            $isDefault = [bool]($line -match '\[default\]\s*$')
+            if ($name) {
+                $devices.Add([ordered]@{
+                    name = $name
+                    isDefault = $isDefault
+                })
+            }
+        }
+    }
+
+    return [ordered]@{
+        devices = @($devices)
+        total = $devices.Count
+    }
+}
+
 $workspacePath = Resolve-Workspace -ProvidedWorkspace $Workspace
 $runtimeDir = Join-Path $workspacePath "tools\launcher\.runtime"
 $publicDir = Join-Path $PSScriptRoot "public"
@@ -580,6 +670,16 @@ try {
                     Write-JsonResponse -Response $res -Data @{
                         ok = $true
                         logs = $logs
+                    }
+                    continue
+                }
+
+                if ($path -eq "/api/downlink/desktop-devices" -and $req.HttpMethod -eq "GET") {
+                    $deviceResult = Get-DownlinkDesktopDevices -WorkspacePath $workspacePath
+                    Write-JsonResponse -Response $res -Data @{
+                        ok = $true
+                        devices = $deviceResult.devices
+                        total = $deviceResult.total
                     }
                     continue
                 }

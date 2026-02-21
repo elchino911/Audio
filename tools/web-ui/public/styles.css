@@ -118,6 +118,22 @@ label {
   font-size: 14px;
 }
 
+.field-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.field-row > select,
+.field-row > input {
+  flex: 1;
+}
+
+.field-row > button {
+  white-space: nowrap;
+  padding: 9px 10px;
+}
+
 .status-grid {
   margin-top: 16px;
   display: grid;

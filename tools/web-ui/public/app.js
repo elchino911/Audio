@@ -13,6 +13,9 @@ const ui = {
   upMicInfo: el("upMicInfo"),
   logOut: el("logOut"),
   logErr: el("logErr"),
+  downDesktopDevice: el("downDesktopDevice"),
+  downSource: el("downSource"),
+  btnRefreshDownDesktopDevices: el("btnRefreshDownDesktopDevices"),
 };
 
 function appendConsole(text) {
@@ -91,6 +94,60 @@ function readForm() {
       tail: Number(el("logsTail").value),
     },
   };
+}
+
+function syncDesktopDeviceEnabled() {
+  const enabled = ui.downSource.value === "desktop";
+  ui.downDesktopDevice.disabled = !enabled;
+  ui.btnRefreshDownDesktopDevices.disabled = !enabled;
+}
+
+function renderDesktopDeviceOptions(devices, currentValue = "") {
+  ui.downDesktopDevice.innerHTML = "";
+
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "(default output)";
+  ui.downDesktopDevice.appendChild(defaultOption);
+
+  let hasCurrent = currentValue === "";
+  const list = Array.isArray(devices) ? devices : [];
+  for (const dev of list) {
+    if (!dev || !dev.name) continue;
+    const opt = document.createElement("option");
+    opt.value = String(dev.name);
+    opt.textContent = dev.isDefault ? `${dev.name} (default)` : String(dev.name);
+    ui.downDesktopDevice.appendChild(opt);
+    if (opt.value === currentValue) hasCurrent = true;
+  }
+
+  if (currentValue && !hasCurrent) {
+    const custom = document.createElement("option");
+    custom.value = currentValue;
+    custom.textContent = `${currentValue} (not detected)`;
+    ui.downDesktopDevice.appendChild(custom);
+    hasCurrent = true;
+  }
+  if (hasCurrent) {
+    ui.downDesktopDevice.value = currentValue;
+  }
+}
+
+async function refreshDesktopDevices({ silent = false } = {}) {
+  const prevValue = ui.downDesktopDevice.value;
+  try {
+    const data = await apiGet("/api/downlink/desktop-devices");
+    renderDesktopDeviceOptions(data.devices || [], prevValue);
+    if (!silent) {
+      appendConsole(`desktop devices loaded: ${Number(data.total || 0)}`);
+    }
+  } catch (err) {
+    if (!silent) {
+      appendConsole(`ERROR loading desktop devices: ${err.message}`);
+    }
+  } finally {
+    syncDesktopDeviceEnabled();
+  }
 }
 
 function setRunPill(target, running) {
@@ -205,6 +262,7 @@ function bindEvents() {
   el("btnRefresh").addEventListener("click", async () => {
     await refreshStatus();
     await refreshLogs();
+    await refreshDesktopDevices({ silent: true });
   });
   el("btnStartAll").addEventListener("click", () => runAction("start", "both"));
   el("btnStopAll").addEventListener("click", () => runAction("stop", "both"));
@@ -213,6 +271,10 @@ function bindEvents() {
   el("btnStartUp").addEventListener("click", () => runAction("start", "uplink"));
   el("btnStopUp").addEventListener("click", () => runAction("stop", "uplink"));
   el("btnLogs").addEventListener("click", () => refreshLogs());
+  ui.btnRefreshDownDesktopDevices.addEventListener("click", () =>
+    refreshDesktopDevices({ silent: false })
+  );
+  ui.downSource.addEventListener("change", () => syncDesktopDeviceEnabled());
 }
 
 let logsTicker = null;
@@ -235,6 +297,8 @@ function setupLogAutoRefresh() {
 
 async function boot() {
   bindEvents();
+  syncDesktopDeviceEnabled();
+  await refreshDesktopDevices({ silent: true });
   setupLogAutoRefresh();
   await refreshStatus();
   await refreshLogs();
