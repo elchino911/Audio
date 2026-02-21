@@ -222,12 +222,28 @@ public partial class MainWindow : Window
             {
                 using var cts = new CancellationTokenSource(GetActionTimeout(action) + TimeSpan.FromSeconds(5));
                 var args = BuildActionArgs(action, profile, forceUpStartAndroidMic);
-                var result = await _launcher.RunAudioLinkAsync(
-                    WorkspaceBox.Text.Trim(),
-                    args,
-                    GetActionTimeout(action),
-                    cts.Token);
-                var output = result.OutputTrimmed;
+                CommandResult result;
+                string output;
+                try
+                {
+                    result = await _launcher.RunAudioLinkAsync(
+                        WorkspaceBox.Text.Trim(),
+                        args,
+                        GetActionTimeout(action),
+                        cts.Token);
+                    output = result.OutputTrimmed;
+                }
+                catch (TimeoutException)
+                {
+                    var applied = await VerifyStateAfterTimeoutAsync(action, profile);
+                    if (!applied)
+                    {
+                        throw;
+                    }
+                    AppendActionOutput($"Aviso: timeout esperando respuesta de script, pero el estado '{action}:{profile}' ya se aplico.");
+                    await RefreshStatusAsync(logOutput: false);
+                    return;
+                }
 
                 if (!result.Success)
                 {
@@ -261,13 +277,58 @@ public partial class MainWindow : Window
         if (action.Equals("start", StringComparison.OrdinalIgnoreCase) ||
             action.Equals("restart", StringComparison.OrdinalIgnoreCase))
         {
-            return TimeSpan.FromSeconds(60);
+            return TimeSpan.FromSeconds(18);
         }
         if (action.Equals("stop", StringComparison.OrdinalIgnoreCase))
         {
-            return TimeSpan.FromSeconds(45);
+            return TimeSpan.FromSeconds(20);
         }
         return TimeSpan.FromSeconds(30);
+    }
+
+    private async Task<bool> VerifyStateAfterTimeoutAsync(string action, string profile)
+    {
+        try
+        {
+            using var verifyCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            var args = new List<string>
+            {
+                "-Action", "status",
+                "-Profile", "both",
+                "-Workspace", WorkspaceBox.Text.Trim()
+            };
+            var result = await _launcher.RunAudioLinkAsync(
+                WorkspaceBox.Text.Trim(),
+                args,
+                TimeSpan.FromSeconds(8),
+                verifyCts.Token);
+            if (!result.Success)
+            {
+                return false;
+            }
+
+            var status = ParseStatus(result.OutputTrimmed);
+            var includesDown = profile.Equals("both", StringComparison.OrdinalIgnoreCase) ||
+                               profile.Equals("downlink", StringComparison.OrdinalIgnoreCase);
+            var includesUp = profile.Equals("both", StringComparison.OrdinalIgnoreCase) ||
+                             profile.Equals("uplink", StringComparison.OrdinalIgnoreCase);
+            var expectRunning = !action.Equals("stop", StringComparison.OrdinalIgnoreCase);
+
+            var ok = true;
+            if (includesDown)
+            {
+                ok = ok && status.DownRunning == expectRunning;
+            }
+            if (includesUp)
+            {
+                ok = ok && status.UpRunning == expectRunning;
+            }
+            return ok;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void ValidateBeforeAction(string action, string profile)
