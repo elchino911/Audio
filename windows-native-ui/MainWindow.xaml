@@ -53,6 +53,15 @@
             <Setter Property="IsReadOnly" Value="True"/>
             <Setter Property="TextElement.Foreground" Value="{StaticResource TextMain}"/>
         </Style>
+        <Style x:Key="{x:Static ComboBox.TextBoxStyleKey}" TargetType="{x:Type TextBox}">
+            <Setter Property="Background" Value="#202B3D"/>
+            <Setter Property="Foreground" Value="#D6E1F5"/>
+            <Setter Property="BorderBrush" Value="#202B3D"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="7,3"/>
+            <Setter Property="SelectionBrush" Value="#3B82F6"/>
+            <Setter Property="CaretBrush" Value="#D6E1F5"/>
+        </Style>
         <Style TargetType="ComboBoxItem">
             <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
             <Setter Property="Background" Value="#202B3D"/>
