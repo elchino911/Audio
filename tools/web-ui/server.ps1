@@ -469,35 +469,68 @@ function Invoke-ProcessCapture {
         [string[]]$ArgumentList = @(),
         [string]$WorkingDirectory = ""
     )
-    $tmpDir = [System.IO.Path]::GetTempPath()
-    $stdoutPath = Join-Path $tmpDir ("proc-out-{0}.log" -f ([System.Guid]::NewGuid().ToString("N")))
-    $stderrPath = Join-Path $tmpDir ("proc-err-{0}.log" -f ([System.Guid]::NewGuid().ToString("N")))
+    $output = ""
+    $stdOut = ""
+    $stdErr = ""
+    $exitCode = 0
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     try {
-        $startParams = @{
-            FilePath = $FilePath
-            ArgumentList = $ArgumentList
-            PassThru = $true
-            Wait = $true
-            WindowStyle = "Hidden"
-            RedirectStandardOutput = $stdoutPath
-            RedirectStandardError = $stderrPath
-        }
         if ($WorkingDirectory) {
-            $startParams.WorkingDirectory = $WorkingDirectory
+            Push-Location $WorkingDirectory
         }
-        $proc = Start-Process @startParams
-        $stdout = if (Test-Path $stdoutPath) { Get-Content $stdoutPath -ErrorAction SilentlyContinue } else { @() }
-        $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -ErrorAction SilentlyContinue } else { @() }
-        return @{
-            ExitCode = $proc.ExitCode
-            StdOut = ($stdout | Out-String)
-            StdErr = ($stderr | Out-String)
-            Output = (@($stdout + $stderr) | Out-String)
+        $lines = & $FilePath @ArgumentList 2>&1
+        $lineTexts = @()
+        foreach ($line in $lines) {
+            if ($null -eq $line) { continue }
+            $lineTexts += "$line"
         }
+        $output = ($lineTexts -join "`n")
+        $stdOut = $output
+        $stdErr = ""
+        if ($null -ne $LASTEXITCODE) {
+            $exitCode = [int]$LASTEXITCODE
+        }
+    } catch {
+        $output = ($_ | Out-String)
+        if (-not $output) {
+            $output = "$($_.Exception.Message)"
+        }
+        $stdErr = $output
+        $exitCode = 1
     } finally {
-        if (Test-Path $stdoutPath) { Remove-Item $stdoutPath -Force -ErrorAction SilentlyContinue }
-        if (Test-Path $stderrPath) { Remove-Item $stderrPath -Force -ErrorAction SilentlyContinue }
+        if ($WorkingDirectory) {
+            Pop-Location
+        }
+        $ErrorActionPreference = $prevEap
     }
+
+    return @{
+        ExitCode = $exitCode
+        StdOut = $stdOut
+        StdErr = $stdErr
+        Output = $output
+    }
+}
+
+function Parse-DesktopDeviceLines {
+    param([string]$Text)
+    $devices = New-Object System.Collections.Generic.List[object]
+    $lines = ($Text -split "`r?`n")
+    foreach ($lineRaw in $lines) {
+        $line = "$lineRaw".Trim()
+        if ($line -match '^\*\s+(.+?)(\s+\[default\])?$') {
+            $name = "$($Matches[1])".Trim()
+            $isDefault = [bool]($line -match '\[default\]\s*$')
+            if ($name) {
+                $devices.Add([ordered]@{
+                    name = $name
+                    isDefault = $isDefault
+                })
+            }
+        }
+    }
+    return @($devices)
 }
 
 function Get-DownlinkDesktopDevices {
@@ -523,22 +556,7 @@ function Get-DownlinkDesktopDevices {
         throw "Fallo al listar dispositivos desktop:`n$($probe.Output)"
     }
 
-    $devices = New-Object System.Collections.Generic.List[object]
-    $lines = ($probe.StdOut -split "`r?`n")
-    foreach ($lineRaw in $lines) {
-        $line = "$lineRaw".Trim()
-        if ($line -match '^\*\s+(.+?)(\s+\[default\])?$') {
-            $name = "$($Matches[1])".Trim()
-            $isDefault = [bool]($line -match '\[default\]\s*$')
-            if ($name) {
-                $devices.Add([ordered]@{
-                    name = $name
-                    isDefault = $isDefault
-                })
-            }
-        }
-    }
-
+    $devices = Parse-DesktopDeviceLines -Text $probe.Output
     return [ordered]@{
         devices = @($devices)
         total = $devices.Count
