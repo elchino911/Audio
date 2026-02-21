@@ -176,6 +176,9 @@ async function runAction(action, profileOverride = null) {
   payload.action = action;
   if (profileOverride) payload.profile = profileOverride;
   try {
+    appendConsole(
+      `payload.down.targetIp=${payload.down.targetIp || "(empty)"} payload.down.mode=${payload.down.mode}`
+    );
     if (action === "start") {
       const includeDown = payload.profile === "both" || payload.profile === "downlink";
       if (includeDown && payload.down.mode === "network" && !payload.down.targetIp) {
@@ -184,6 +187,9 @@ async function runAction(action, profileOverride = null) {
     }
     appendConsole(`action=${action} profile=${payload.profile}`);
     const data = await apiPost("/api/action", payload);
+    if (Array.isArray(data.invokedArgs)) {
+      appendConsole(`invokedArgs: ${data.invokedArgs.join(" ")}`);
+    }
     if (action === "status") {
       ui.console.textContent = "";
     }

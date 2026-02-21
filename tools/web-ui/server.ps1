@@ -544,6 +544,7 @@ try {
                     Write-JsonResponse -Response $res -Data @{
                         ok = $true
                         output = $output
+                        invokedArgs = $args
                         status = $status
                     }
                     continue
