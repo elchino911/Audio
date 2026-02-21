@@ -107,7 +107,7 @@ function renderDesktopDeviceOptions(devices, currentValue = "") {
 
   const defaultOption = document.createElement("option");
   defaultOption.value = "";
-  defaultOption.textContent = "(default output)";
+  defaultOption.textContent = "(default output, click Reload to list)";
   ui.downDesktopDevice.appendChild(defaultOption);
 
   let hasCurrent = currentValue === "";
@@ -262,7 +262,6 @@ function bindEvents() {
   el("btnRefresh").addEventListener("click", async () => {
     await refreshStatus();
     await refreshLogs();
-    await refreshDesktopDevices({ silent: true });
   });
   el("btnStartAll").addEventListener("click", () => runAction("start", "both"));
   el("btnStopAll").addEventListener("click", () => runAction("stop", "both"));
@@ -298,7 +297,6 @@ function setupLogAutoRefresh() {
 async function boot() {
   bindEvents();
   syncDesktopDeviceEnabled();
-  await refreshDesktopDevices({ silent: true });
   setupLogAutoRefresh();
   await refreshStatus();
   await refreshLogs();
