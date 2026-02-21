@@ -354,7 +354,7 @@ function Build-AudioLinkArgsFromPayload {
     }
 
     $logs = Get-Prop -Obj $Payload -Name "logs"
-    if ($logs) {
+    if ($logs -and $action -eq "logs") {
         $tail = Get-Prop -Obj $logs -Name "tail"
         if ($tail) {
             $args += @("-Tail", "$tail")
@@ -367,15 +367,19 @@ function Build-AudioLinkArgsFromPayload {
 function Invoke-AudioLinkAction {
     param(
         [string]$AudioLinkScript,
-        [string[]]$Args
+        [string[]]$AudioLinkArgs
     )
     $cmdArgs = @(
         "-NoProfile",
         "-ExecutionPolicy", "Bypass",
         "-File", $AudioLinkScript
-    ) + $Args
+    ) + $AudioLinkArgs
     $output = & powershell @cmdArgs 2>&1 | Out-String
-    return $output
+    $exitCode = $LASTEXITCODE
+    return @{
+        Output = $output
+        ExitCode = $exitCode
+    }
 }
 
 function Parse-QueryString {
@@ -406,10 +410,10 @@ function Read-LogTail {
 $workspacePath = Resolve-Workspace -ProvidedWorkspace $Workspace
 $runtimeDir = Join-Path $workspacePath "tools\launcher\.runtime"
 $publicDir = Join-Path $PSScriptRoot "public"
-$audioLinkScript = Join-Path $workspacePath "audio-link.ps1"
+$audioLinkScript = Join-Path $workspacePath "tools\launcher\audio-link.ps1"
 
 if (-not (Test-Path $audioLinkScript)) {
-    throw "No se encontro audio-link.ps1 en $workspacePath"
+    throw "No se encontro tools\\launcher\\audio-link.ps1 en $workspacePath"
 }
 if (-not (Test-Path $publicDir)) {
     throw "No se encontro carpeta public: $publicDir"
@@ -539,11 +543,18 @@ try {
                     }
                     $payload = $body | ConvertFrom-Json
                     $args = Build-AudioLinkArgsFromPayload -Payload $payload -WorkspacePath $workspacePath
-                    $output = Invoke-AudioLinkAction -AudioLinkScript $audioLinkScript -Args $args
+                    $invokeResult = Invoke-AudioLinkAction -AudioLinkScript $audioLinkScript -AudioLinkArgs $args
+                    if ([int]$invokeResult.ExitCode -ne 0) {
+                        $errText = "$($invokeResult.Output)".Trim()
+                        if (-not $errText) {
+                            $errText = "audio-link fallo con exit code $($invokeResult.ExitCode)"
+                        }
+                        throw $errText
+                    }
                     $status = Get-StatusObject -WorkspacePath $workspacePath -RuntimeDir $runtimeDir
                     Write-JsonResponse -Response $res -Data @{
                         ok = $true
-                        output = $output
+                        output = "$($invokeResult.Output)"
                         invokedArgs = $args
                         status = $status
                     }

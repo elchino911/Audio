@@ -160,6 +160,7 @@ $adbExe = $null
 $device = $null
 $effectiveTransport = $Transport
 $effectiveTargetIp = $TargetIp
+$shouldStartReceiver = -not [bool]$SkipReceiverStart
 
 if (-not (Test-Path $senderDir)) {
     throw "No existe directorio sender: $senderDir"
@@ -180,11 +181,24 @@ if ($Mode -eq "network" -and -not $effectiveTargetIp) {
     throw "En modo network debes pasar -TargetIp <ip_del_android>."
 }
 
-if ($Mode -eq "usb" -or -not $SkipReceiverStart) {
+if ($Mode -eq "usb") {
     $adbExe = Resolve-Exe -CommandName "adb" -FallbackPaths @(
         "$env:USERPROFILE\AppData\Local\Android\Sdk\platform-tools\adb.exe"
     )
     $device = Resolve-AndroidSerial -AdbExe $adbExe -PreferredSerial $DeviceSerial
+} elseif ($shouldStartReceiver) {
+    try {
+        $adbExe = Resolve-Exe -CommandName "adb" -FallbackPaths @(
+            "$env:USERPROFILE\AppData\Local\Android\Sdk\platform-tools\adb.exe"
+        )
+        $device = Resolve-AndroidSerial -AdbExe $adbExe -PreferredSerial $DeviceSerial
+    } catch {
+        Write-Warning "No se pudo usar ADB para iniciar receiver automaticamente: $($_.Exception.Message)"
+        Write-Warning "Continuando en modo network sin arranque ADB. Inicia la app Android manualmente y pulsa Start."
+        $shouldStartReceiver = $false
+        $adbExe = $null
+        $device = $null
+    }
 }
 
 if (-not $SkipBuild -or -not (Test-Path $senderExe)) {
@@ -245,7 +259,7 @@ if ($Mode -eq "usb") {
     }
 }
 
-if (-not $SkipReceiverStart -and $adbExe -and $device) {
+if ($shouldStartReceiver -and $adbExe -and $device) {
     Write-Host "Iniciando receiver Android..."
     $stopArgs = @(
         "-s", $device, "shell", "am", "startservice",
@@ -318,7 +332,7 @@ $state = [ordered]@{
     SenderExe = $senderExe
     SenderLog = $senderLog
     SenderErrLog = $senderErrLog
-    SkipReceiverStart = [bool]$SkipReceiverStart
+    SkipReceiverStart = (-not [bool]$shouldStartReceiver)
     AutoReconnectUsb = $AutoReconnectUsb
     UsbWatchdogIntervalMs = $UsbWatchdogIntervalMs
     SenderPid = $senderProc.Id
