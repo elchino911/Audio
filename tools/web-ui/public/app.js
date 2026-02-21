@@ -1,5 +1,6 @@
 const qs = new URLSearchParams(location.search);
 const token = qs.get("token") || "";
+let currentUiMode = "basic";
 
 const el = (id) => document.getElementById(id);
 const ui = {
@@ -16,6 +17,7 @@ const ui = {
   downDesktopDevice: el("downDesktopDevice"),
   downSource: el("downSource"),
   btnRefreshDownDesktopDevices: el("btnRefreshDownDesktopDevices"),
+  uiMode: el("uiMode"),
 };
 
 function appendConsole(text) {
@@ -89,11 +91,19 @@ function readForm() {
       outputDevice: el("upOutputDevice").value.trim(),
       targetBufferMs: Number(el("upTargetBuffer").value),
       maxBufferMs: Number(el("upMaxBuffer").value),
+      startAndroidMic: currentUiMode === "advanced",
     },
     logs: {
       tail: Number(el("logsTail").value),
     },
   };
+}
+
+function applyUiMode() {
+  const mode = ui.uiMode?.value === "advanced" ? "advanced" : "basic";
+  currentUiMode = mode;
+  document.body.classList.toggle("mode-basic", mode === "basic");
+  document.body.classList.toggle("mode-advanced", mode === "advanced");
 }
 
 function syncDesktopDeviceEnabled() {
@@ -259,9 +269,11 @@ async function runAction(action, profileOverride = null) {
 }
 
 function bindEvents() {
+  ui.uiMode?.addEventListener("change", () => applyUiMode());
   el("btnRefresh").addEventListener("click", async () => {
     await refreshStatus();
     await refreshLogs();
+    await refreshDesktopDevices({ silent: true });
   });
   el("btnStartAll").addEventListener("click", () => runAction("start", "both"));
   el("btnStopAll").addEventListener("click", () => runAction("stop", "both"));
@@ -296,7 +308,9 @@ function setupLogAutoRefresh() {
 
 async function boot() {
   bindEvents();
+  applyUiMode();
   syncDesktopDeviceEnabled();
+  await refreshDesktopDevices({ silent: true });
   setupLogAutoRefresh();
   await refreshStatus();
   await refreshLogs();

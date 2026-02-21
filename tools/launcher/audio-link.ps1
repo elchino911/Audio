@@ -36,6 +36,7 @@ param(
     [string]$UpOutputDevice = "CABLE Input (VB-Audio Virtual Cable)",
     [int]$UpTargetBufferMs = 50,
     [int]$UpMaxBufferMs = 250,
+    [object]$UpStartAndroidMic = $true,
     [switch]$UpSkipBuildBridge,
     [switch]$UpNoRestartMic,
 
@@ -203,18 +204,9 @@ function Start-Uplink {
         [string]$StartBridgeScript,
         [string]$StartMicScript,
         [string]$WorkspacePath,
-        [string]$Device
+        [string]$Device,
+        [bool]$StartAndroidMic = $true
     )
-    $targetIp = $UpTargetIp
-    if (-not $targetIp) {
-        $targetIp = Get-PrimaryIPv4
-        if ($targetIp) {
-            Write-Host "UpTargetIp no especificado, usando IPv4 local detectada: $targetIp"
-        } else {
-            throw "Uplink requiere -UpTargetIp (no se pudo detectar IP local automaticamente)."
-        }
-    }
-
     $bridgeArgs = @{
         Port = $UpPort
         Transport = $UpTransport
@@ -226,16 +218,30 @@ function Start-Uplink {
     if ($UpSkipBuildBridge) { $bridgeArgs.SkipBuild = $true }
     & $StartBridgeScript @bridgeArgs
 
-    $micArgs = @{
-        TargetIp = $targetIp
-        Port = $UpPort
-        FrameMs = $UpFrameMs
-        Transport = $UpTransport
-        MicSource = $UpMicSource
+    if ($StartAndroidMic) {
+        $targetIp = $UpTargetIp
+        if (-not $targetIp) {
+            $targetIp = Get-PrimaryIPv4
+            if ($targetIp) {
+                Write-Host "UpTargetIp no especificado, usando IPv4 local detectada: $targetIp"
+            } else {
+                throw "Uplink requiere -UpTargetIp (no se pudo detectar IP local automaticamente)."
+            }
+        }
+
+        $micArgs = @{
+            TargetIp = $targetIp
+            Port = $UpPort
+            FrameMs = $UpFrameMs
+            Transport = $UpTransport
+            MicSource = $UpMicSource
+        }
+        if ($Device) { $micArgs.DeviceSerial = $Device }
+        if ($UpNoRestartMic) { $micArgs.NoRestart = $true }
+        & $StartMicScript @micArgs
+    } else {
+        Write-Host "Uplink en modo bridge-only: no se inicia MicSenderService en Android."
     }
-    if ($Device) { $micArgs.DeviceSerial = $Device }
-    if ($UpNoRestartMic) { $micArgs.NoRestart = $true }
-    & $StartMicScript @micArgs
 }
 
 function Stop-Uplink {
@@ -243,24 +249,27 @@ function Stop-Uplink {
         [string]$StopBridgeScript,
         [string]$StopMicScript,
         [string]$WorkspacePath,
-        [string]$Device
+        [string]$Device,
+        [bool]$StopAndroidMic = $true
     )
     $errors = New-Object System.Collections.Generic.List[string]
 
-    $micArgs = @{}
-    if ($Device) { $micArgs.DeviceSerial = $Device }
-    try {
-        & $StopMicScript @micArgs
-    } catch {
-        $msg = "$($_.Exception.Message)"
-        if (
-            $msg -match "No hay dispositivo Android fisico conectado por ADB" -or
-            $msg -match "no devices/emulators found" -or
-            $msg -match "device offline"
-        ) {
-            Write-Warning "No se pudo detener MicSenderService por ADB (dispositivo no disponible). Se continua con bridge."
-        } else {
-            $errors.Add("mic sender: $msg")
+    if ($StopAndroidMic) {
+        $micArgs = @{}
+        if ($Device) { $micArgs.DeviceSerial = $Device }
+        try {
+            & $StopMicScript @micArgs
+        } catch {
+            $msg = "$($_.Exception.Message)"
+            if (
+                $msg -match "No hay dispositivo Android fisico conectado por ADB" -or
+                $msg -match "no devices/emulators found" -or
+                $msg -match "device offline"
+            ) {
+                Write-Warning "No se pudo detener MicSenderService por ADB (dispositivo no disponible). Se continua con bridge."
+            } else {
+                $errors.Add("mic sender: $msg")
+            }
         }
     }
 
@@ -277,6 +286,7 @@ function Stop-Uplink {
 
 $workspacePath = Resolve-Workspace -ProvidedWorkspace $Workspace
 $DownAutoReconnectUsbValue = Convert-ToBooleanValue -Value $DownAutoReconnectUsb -Default $true -ParamName "DownAutoReconnectUsb"
+$UpStartAndroidMicValue = Convert-ToBooleanValue -Value $UpStartAndroidMic -Default $true -ParamName "UpStartAndroidMic"
 $launcherDir = Join-Path $workspacePath "tools\launcher"
 
 $startDownlinkScript = Join-Path $launcherDir "start-audio-link.ps1"
@@ -302,7 +312,7 @@ if ($Action -eq "restart") {
     $restartErrors = New-Object System.Collections.Generic.List[string]
     if (Include-Profile -CurrentProfile $Profile -Needle "uplink") {
         try {
-            Stop-Uplink -StopBridgeScript $stopBridgeScript -StopMicScript $stopMicScript -WorkspacePath $workspacePath -Device $DeviceSerial
+            Stop-Uplink -StopBridgeScript $stopBridgeScript -StopMicScript $stopMicScript -WorkspacePath $workspacePath -Device $DeviceSerial -StopAndroidMic $UpStartAndroidMicValue
         } catch {
             $restartErrors.Add("uplink stop: $($_.Exception.Message)")
         }
@@ -323,7 +333,7 @@ if ($Action -eq "restart") {
         Start-Downlink -ScriptPath $startDownlinkScript -WorkspacePath $workspacePath -Device $DeviceSerial
     }
     if (Include-Profile -CurrentProfile $Profile -Needle "uplink") {
-        Start-Uplink -StartBridgeScript $startBridgeScript -StartMicScript $startMicScript -WorkspacePath $workspacePath -Device $DeviceSerial
+        Start-Uplink -StartBridgeScript $startBridgeScript -StartMicScript $startMicScript -WorkspacePath $workspacePath -Device $DeviceSerial -StartAndroidMic $UpStartAndroidMicValue
     }
     return
 }
@@ -334,14 +344,14 @@ switch ($Action) {
             Start-Downlink -ScriptPath $startDownlinkScript -WorkspacePath $workspacePath -Device $DeviceSerial
         }
         if (Include-Profile -CurrentProfile $Profile -Needle "uplink") {
-            Start-Uplink -StartBridgeScript $startBridgeScript -StartMicScript $startMicScript -WorkspacePath $workspacePath -Device $DeviceSerial
+            Start-Uplink -StartBridgeScript $startBridgeScript -StartMicScript $startMicScript -WorkspacePath $workspacePath -Device $DeviceSerial -StartAndroidMic $UpStartAndroidMicValue
         }
     }
     "stop" {
         $stopErrors = New-Object System.Collections.Generic.List[string]
         if (Include-Profile -CurrentProfile $Profile -Needle "uplink") {
             try {
-                Stop-Uplink -StopBridgeScript $stopBridgeScript -StopMicScript $stopMicScript -WorkspacePath $workspacePath -Device $DeviceSerial
+                Stop-Uplink -StopBridgeScript $stopBridgeScript -StopMicScript $stopMicScript -WorkspacePath $workspacePath -Device $DeviceSerial -StopAndroidMic $UpStartAndroidMicValue
             } catch {
                 $stopErrors.Add("uplink: $($_.Exception.Message)")
             }

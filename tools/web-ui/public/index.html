@@ -18,6 +18,13 @@
         <p id="serverHint">Conectando...</p>
       </div>
       <div class="actions">
+        <label class="mode-switch">
+          <span>Modo</span>
+          <select id="uiMode">
+            <option value="basic" selected>Basico</option>
+            <option value="advanced">Avanzado</option>
+          </select>
+        </label>
         <button id="btnRefresh" class="ghost">Refresh</button>
         <button id="btnStartAll">Start All</button>
         <button id="btnStopAll" class="danger">Stop All</button>
@@ -35,7 +42,7 @@
         <p id="upState" class="pill stopped">stopped</p>
         <p id="upInfo" class="mono">-</p>
       </article>
-      <article class="status-card">
+      <article class="status-card adv-only">
         <h3>Uplink Mic</h3>
         <p id="upMicState" class="pill warn">unknown</p>
         <p id="upMicInfo" class="mono">Revisa logcat: <code>MicSenderService</code></p>
@@ -52,14 +59,14 @@
           </div>
         </div>
         <div class="grid two">
-          <label>Profile
+          <label class="adv-only">Profile
             <select id="profile">
               <option value="both">both</option>
               <option value="downlink">downlink</option>
               <option value="uplink">uplink</option>
             </select>
           </label>
-          <label>Device Serial
+          <label class="adv-only">Device Serial
             <input id="deviceSerial" type="text" placeholder="344b5d65" />
           </label>
           <label>Mode
@@ -71,17 +78,17 @@
           <label>Target IP
             <input id="downTargetIp" type="text" placeholder="192.168.100.49" />
           </label>
-          <label>Port
+          <label class="adv-only">Port
             <select id="downPort">
               <option>50000</option>
             </select>
           </label>
-          <label>Frame ms
+          <label class="adv-only">Frame ms
             <select id="downFrame">
               <option>2</option><option selected>5</option><option>10</option><option>15</option><option>20</option>
             </select>
           </label>
-          <label>Jitter ms
+          <label class="adv-only">Jitter ms
             <select id="downJitter">
               <option>10</option><option>15</option><option selected>20</option><option>25</option><option>30</option><option>35</option><option>40</option><option>50</option>
             </select>
@@ -92,7 +99,7 @@
               <option value="mic">mic</option>
             </select>
           </label>
-          <label>Transport
+          <label class="adv-only">Transport
             <select id="downTransport">
               <option value="udp">udp</option>
               <option value="tcp">tcp</option>
@@ -117,7 +124,8 @@
             <button id="btnStopUp" class="ghost">Stop</button>
           </div>
         </div>
-        <div class="grid two">
+        <p class="basic-only basic-hint">Modo basico: solo bridge de escucha en Windows.</p>
+        <div class="grid two adv-only">
           <label>Target IP
             <input id="upTargetIp" type="text" placeholder="192.168.100.17" />
           </label>
@@ -161,7 +169,7 @@
       </article>
     </section>
 
-    <section class="logs">
+    <section class="logs adv-only">
       <div class="panel-head">
         <h2>Logs</h2>
         <div class="inline-buttons">
@@ -192,7 +200,7 @@
       </div>
     </section>
 
-    <section class="console">
+    <section class="console adv-only">
       <h2>Action Output</h2>
       <pre id="console"></pre>
     </section>

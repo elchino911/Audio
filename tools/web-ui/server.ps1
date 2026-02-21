@@ -366,6 +366,7 @@ function Build-AudioLinkArgsFromPayload {
         $upOutputDevice = Get-Prop -Obj $up -Name "outputDevice" -Default ""
         $upTargetBufferMs = Get-Prop -Obj $up -Name "targetBufferMs"
         $upMaxBufferMs = Get-Prop -Obj $up -Name "maxBufferMs"
+        $upStartAndroidMic = Get-Prop -Obj $up -Name "startAndroidMic"
         $upSkipBuildBridge = Get-Prop -Obj $up -Name "skipBuildBridge" -Default $false
         $upNoRestartMic = Get-Prop -Obj $up -Name "noRestartMic" -Default $false
 
@@ -377,6 +378,8 @@ function Build-AudioLinkArgsFromPayload {
         if ($upOutputDevice) { $args += @("-UpOutputDevice", "$upOutputDevice") }
         if ($upTargetBufferMs) { $args += @("-UpTargetBufferMs", "$upTargetBufferMs") }
         if ($upMaxBufferMs) { $args += @("-UpMaxBufferMs", "$upMaxBufferMs") }
+        $upStartAndroidMicCli = Normalize-BoolCliValue -Value $upStartAndroidMic
+        if ($null -ne $upStartAndroidMicCli) { $args += @("-UpStartAndroidMic", $upStartAndroidMicCli) }
         if ($upSkipBuildBridge -eq $true) { $args += "-UpSkipBuildBridge" }
         if ($upNoRestartMic -eq $true) { $args += "-UpNoRestartMic" }
     }
