@@ -69,6 +69,8 @@ public partial class MainWindow : Window
         DownTargetIpBox.Text = string.Empty;
         UpTargetIpBox.Text = GetLocalIpv4Hint();
         UplinkBasicHintText.Text = "Modo basico: solo bridge de escucha en Windows. Android define destino/puerto/frame/transporte.";
+        DownSkipBuildCheck.IsChecked = true;
+        UpSkipBuildBridgeCheck.IsChecked = true;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -253,7 +255,7 @@ public partial class MainWindow : Window
         if (action.Equals("start", StringComparison.OrdinalIgnoreCase) ||
             action.Equals("restart", StringComparison.OrdinalIgnoreCase))
         {
-            return TimeSpan.FromSeconds(180);
+            return TimeSpan.FromSeconds(60);
         }
         if (action.Equals("stop", StringComparison.OrdinalIgnoreCase))
         {

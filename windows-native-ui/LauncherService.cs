@@ -169,31 +169,13 @@ public sealed class LauncherService
             process.StartInfo.ArgumentList.Add(arg);
         }
 
-        var stdOut = new StringBuilder();
-        var stdErr = new StringBuilder();
-
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                stdOut.AppendLine(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
-                stdErr.AppendLine(e.Data);
-            }
-        };
-
         if (!process.Start())
         {
             throw new InvalidOperationException($"No se pudo iniciar proceso: {fileName}");
         }
 
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        var stdOutTask = process.StandardOutput.ReadToEndAsync();
+        var stdErrTask = process.StandardError.ReadToEndAsync();
         using var registration = cancellationToken.Register(() =>
         {
             try
@@ -224,11 +206,13 @@ public sealed class LauncherService
             throw;
         }
 
+        await Task.WhenAll(stdOutTask, stdErrTask);
+
         return new CommandResult(
             process.ExitCode == 0,
             process.ExitCode,
-            stdOut.ToString(),
-            stdErr.ToString());
+            stdOutTask.Result,
+            stdErrTask.Result);
     }
 }
 
