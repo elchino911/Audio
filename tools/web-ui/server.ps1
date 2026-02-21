@@ -397,31 +397,20 @@ function Invoke-AudioLinkAction {
         [string]$AudioLinkScript,
         [string[]]$AudioLinkArgs
     )
-    $tmpDir = [System.IO.Path]::GetTempPath()
-    $stdoutPath = Join-Path $tmpDir ("audio-link-out-{0}.log" -f ([System.Guid]::NewGuid().ToString("N")))
-    $stderrPath = Join-Path $tmpDir ("audio-link-err-{0}.log" -f ([System.Guid]::NewGuid().ToString("N")))
+    $output = ""
+    $exitCode = 0
     try {
-        $cmdArgs = @(
-            "-NoProfile",
-            "-ExecutionPolicy", "Bypass",
-            "-File", $AudioLinkScript
-        ) + $AudioLinkArgs
-        $proc = Start-Process `
-            -FilePath "powershell.exe" `
-            -ArgumentList $cmdArgs `
-            -PassThru `
-            -Wait `
-            -WindowStyle Hidden `
-            -RedirectStandardOutput $stdoutPath `
-            -RedirectStandardError $stderrPath
-
-        $stdout = if (Test-Path $stdoutPath) { Get-Content $stdoutPath -ErrorAction SilentlyContinue } else { @() }
-        $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -ErrorAction SilentlyContinue } else { @() }
-        $output = @($stdout + $stderr) | Out-String
-        $exitCode = $proc.ExitCode
-    } finally {
-        if (Test-Path $stdoutPath) { Remove-Item $stdoutPath -Force -ErrorAction SilentlyContinue }
-        if (Test-Path $stderrPath) { Remove-Item $stderrPath -Force -ErrorAction SilentlyContinue }
+        # Call script directly so argument boundaries are preserved
+        # (important for values with spaces/parentheses, e.g. output device names).
+        $invocation = & $AudioLinkScript @AudioLinkArgs 2>&1 | Out-String
+        $output = "$invocation"
+        if ($null -ne $LASTEXITCODE) {
+            $exitCode = [int]$LASTEXITCODE
+        }
+    } catch {
+        $msg = $_ | Out-String
+        $output = if ($msg) { $msg } else { "$($_.Exception.Message)" }
+        $exitCode = 1
     }
     return @{
         Output = $output
