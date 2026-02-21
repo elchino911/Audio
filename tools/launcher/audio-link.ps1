@@ -372,8 +372,34 @@ switch ($Action) {
             $downState = Read-JsonOrNull -Path $downStatePath
             if ($downState) {
                 $senderPid = [int]$downState.SenderPid
-                $alive = Test-ProcessAlive -ProcessId $senderPid
-                Write-Host "downlink: running=$alive pid=$senderPid mode=$($downState.Mode) transport=$($downState.Transport) target=$($downState.TargetIp):$($downState.Port)"
+                $senderAlive = Test-ProcessAlive -ProcessId $senderPid
+                $watchdogPid = 0
+                $watchdogAlive = $false
+                if ($downState.PSObject.Properties.Name -contains "WatchdogPid") {
+                    $watchdogPid = [int]$downState.WatchdogPid
+                    $watchdogAlive = Test-ProcessAlive -ProcessId $watchdogPid
+                }
+
+                if ($senderAlive) {
+                    Write-Host "downlink: running=True pid=$senderPid mode=$($downState.Mode) transport=$($downState.Transport) target=$($downState.TargetIp):$($downState.Port)"
+                } else {
+                    if ($watchdogAlive) {
+                        try {
+                            Stop-Process -Id $watchdogPid -Force -ErrorAction Stop
+                        } catch {
+                            Write-Warning "No se pudo detener watchdog stale PID ${watchdogPid}: $($_.Exception.Message)"
+                        }
+                        Start-Sleep -Milliseconds 120
+                        $watchdogAlive = Test-ProcessAlive -ProcessId $watchdogPid
+                    }
+
+                    if (-not $watchdogAlive) {
+                        Remove-Item $downStatePath -Force -ErrorAction SilentlyContinue
+                        Write-Host "downlink: stopped (stale session cleaned)"
+                    } else {
+                        Write-Host "downlink: stopped (stale sender pid=$senderPid; watchdog pid=$watchdogPid still alive)"
+                    }
+                }
             } else {
                 Write-Host "downlink: stopped"
             }
@@ -384,7 +410,12 @@ switch ($Action) {
             if ($bridgeState) {
                 $bridgePid = [int]$bridgeState.Pid
                 $alive = Test-ProcessAlive -ProcessId $bridgePid
-                Write-Host "uplink-bridge: running=$alive pid=$bridgePid transport=$($bridgeState.Transport) port=$($bridgeState.Port)"
+                if ($alive) {
+                    Write-Host "uplink-bridge: running=True pid=$bridgePid transport=$($bridgeState.Transport) port=$($bridgeState.Port)"
+                } else {
+                    Remove-Item $bridgeStatePath -Force -ErrorAction SilentlyContinue
+                    Write-Host "uplink-bridge: stopped (stale session cleaned)"
+                }
             } else {
                 Write-Host "uplink-bridge: stopped"
             }
