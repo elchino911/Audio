@@ -81,6 +81,45 @@ function Resolve-AndroidSerial {
     throw "Hay multiples dispositivos fisicos. Pasa -DeviceSerial <serial>."
 }
 
+function Is-ProcessRunning {
+    param([int]$ProcessId)
+    if ($ProcessId -le 0) { return $false }
+    try {
+        $null = Get-Process -Id $ProcessId -ErrorAction Stop
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Stop-ManagedProcess {
+    param(
+        [int]$ProcessId,
+        [string]$Label
+    )
+    if ($ProcessId -le 0) { return }
+    if (-not (Is-ProcessRunning -ProcessId $ProcessId)) { return }
+
+    $stopErr = $null
+    try {
+        Stop-Process -Id $ProcessId -Force -ErrorAction Stop
+    } catch {
+        $stopErr = $_.Exception.Message
+        try {
+            & taskkill /PID $ProcessId /F /T 2>$null | Out-Null
+        } catch {
+        }
+    }
+
+    Start-Sleep -Milliseconds 120
+    if (Is-ProcessRunning -ProcessId $ProcessId) {
+        if (-not $stopErr) {
+            $stopErr = "proceso sigue en ejecucion tras intento de cierre"
+        }
+        throw "No se pudo detener $Label (PID $ProcessId): $stopErr"
+    }
+}
+
 function Stop-ExistingSession {
     param([string]$StatePath)
     if (-not (Test-Path $StatePath)) {
@@ -90,14 +129,26 @@ function Stop-ExistingSession {
     try {
         $state = Get-Content $StatePath -Raw | ConvertFrom-Json
         if ($state.SenderPid) {
-            Stop-Process -Id ([int]$state.SenderPid) -Force -ErrorAction SilentlyContinue
+            Stop-ManagedProcess -ProcessId ([int]$state.SenderPid) -Label "Sender previo"
         }
         if ($state.WatchdogPid) {
-            Stop-Process -Id ([int]$state.WatchdogPid) -Force -ErrorAction SilentlyContinue
+            Stop-ManagedProcess -ProcessId ([int]$state.WatchdogPid) -Label "Watchdog previo"
         }
+        Remove-Item $StatePath -Force -ErrorAction SilentlyContinue
     } catch {
-        Write-Warning "No se pudo cerrar sesion previa desde estado: $($_.Exception.Message)"
+        throw "No se pudo cerrar sesion previa desde estado: $($_.Exception.Message)"
     }
+}
+
+function Stop-OrphanSenders {
+    $procs = Get-Process -Name "windows-sender" -ErrorAction SilentlyContinue
+    if (-not $procs) { return 0 }
+    $stopped = 0
+    foreach ($proc in $procs) {
+        Stop-ManagedProcess -ProcessId ([int]$proc.Id) -Label "Sender huerfano"
+        $stopped++
+    }
+    return $stopped
 }
 
 function Save-State {
@@ -191,6 +242,10 @@ if (-not (Test-Path $senderDir)) {
 
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 Stop-ExistingSession -StatePath $statePath
+$orphanStopped = Stop-OrphanSenders
+if ($orphanStopped -gt 0) {
+    Write-Host "Se detuvieron $orphanStopped proceso(s) sender huerfanos antes de iniciar."
+}
 
 Reset-LogFileBestEffort -Path $senderLog
 Reset-LogFileBestEffort -Path $senderErrLog
