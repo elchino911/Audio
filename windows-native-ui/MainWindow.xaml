@@ -44,25 +44,26 @@
             <Setter Property="Margin" Value="0,0,0,10"/>
         </Style>
         <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="#202B3D"/>
-            <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+            <Setter Property="Background" Value="#F3F6FC"/>
+            <Setter Property="Foreground" Value="#111827"/>
             <Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
             <Setter Property="Padding" Value="8,5"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
             <Setter Property="IsEditable" Value="False"/>
             <Setter Property="IsReadOnly" Value="False"/>
+            <Setter Property="TextElement.Foreground" Value="#111827"/>
         </Style>
         <Style TargetType="ComboBoxItem">
-            <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
-            <Setter Property="Background" Value="#202B3D"/>
+            <Setter Property="Foreground" Value="#111827"/>
+            <Setter Property="Background" Value="#F3F6FC"/>
             <Setter Property="Padding" Value="7,4"/>
             <Style.Triggers>
                 <Trigger Property="IsHighlighted" Value="True">
-                    <Setter Property="Background" Value="#2F4B77"/>
+                    <Setter Property="Background" Value="#DFE7F8"/>
                 </Trigger>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#3B82F6"/>
-                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="Background" Value="#C7D5F6"/>
+                    <Setter Property="Foreground" Value="#0B1324"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -228,7 +229,7 @@
                                             <TextBlock Text="Target IP" Style="{StaticResource LabelStyle}"/><TextBox x:Name="DownTargetIpBox"/>
                                             <TextBlock Text="Source" Style="{StaticResource LabelStyle}"/><ComboBox x:Name="DownSourceCombo" SelectionChanged="DownSourceCombo_SelectionChanged"/>
                                             <TextBlock Text="Desktop Device" Style="{StaticResource LabelStyle}"/>
-                                            <DockPanel Margin="0,0,0,10"><Button x:Name="ReloadDesktopDevicesButton" DockPanel.Dock="Right" Content="Reload" Style="{StaticResource GhostButtonStyle}" Click="ReloadDesktopDevicesButton_Click" Margin="8,0,0,0"/><ComboBox x:Name="DownDesktopDeviceCombo" IsEditable="True" IsReadOnly="False"><ComboBox.Resources><Style TargetType="{x:Type TextBox}"><Setter Property="Background" Value="#202B3D"/><Setter Property="Foreground" Value="#D6E1F5"/><Setter Property="BorderBrush" Value="#202B3D"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="7,3"/><Setter Property="SelectionBrush" Value="#3B82F6"/><Setter Property="CaretBrush" Value="#D6E1F5"/></Style></ComboBox.Resources></ComboBox></DockPanel>
+                                            <DockPanel Margin="0,0,0,10"><Button x:Name="ReloadDesktopDevicesButton" DockPanel.Dock="Right" Content="Reload" Style="{StaticResource GhostButtonStyle}" Click="ReloadDesktopDevicesButton_Click" Margin="8,0,0,0"/><ComboBox x:Name="DownDesktopDeviceCombo" IsEditable="True" IsReadOnly="False"><ComboBox.Resources><Style TargetType="{x:Type TextBox}"><Setter Property="Background" Value="#F3F6FC"/><Setter Property="Foreground" Value="#111827"/><Setter Property="BorderBrush" Value="#F3F6FC"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="7,3"/><Setter Property="SelectionBrush" Value="#93C5FD"/><Setter Property="CaretBrush" Value="#111827"/></Style></ComboBox.Resources></ComboBox></DockPanel>
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" x:Name="DownAdvancedPanel">
                                             <TextBlock Text="Profile" Style="{StaticResource LabelStyle}"/><ComboBox x:Name="GlobalProfileCombo"/>
