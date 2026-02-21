@@ -86,9 +86,10 @@ public partial class MainWindow : Window
 
             await RunWithLoadingAsync("Inicializando UI nativa...", async () =>
             {
-                await RefreshStatusAsync(logOutput: false);
-                await ReloadDesktopDevicesAsync(logOutput: false);
-                await ReloadLogsAsync(logOutput: false);
+                using var initCts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+                await RefreshStatusAsync(logOutput: false, initCts.Token);
+                await ReloadDesktopDevicesAsync(logOutput: false, initCts.Token);
+                await ReloadLogsAsync(logOutput: false, initCts.Token);
             });
 
             AppendActionOutput("UI nativa lista.");
@@ -121,7 +122,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task RefreshStatusAsync(bool logOutput)
+    private async Task RefreshStatusAsync(bool logOutput, CancellationToken cancellationToken = default)
     {
         var args = new List<string>
         {
@@ -130,7 +131,7 @@ public partial class MainWindow : Window
             "-Workspace", WorkspaceBox.Text.Trim()
         };
 
-        var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args, StatusTimeout);
+        var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args, StatusTimeout, cancellationToken);
         var output = result.OutputTrimmed;
         if (!result.Success)
         {
@@ -146,7 +147,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ReloadLogsAsync(bool logOutput)
+    private async Task ReloadLogsAsync(bool logOutput, CancellationToken cancellationToken = default)
     {
         var profile = SelectedText(LogsProfileCombo, "both");
         var tail = SelectedText(LogsTailCombo, "80");
@@ -158,7 +159,7 @@ public partial class MainWindow : Window
             "-Tail", tail
         };
 
-        var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args, LogsTimeout);
+        var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args, LogsTimeout, cancellationToken);
         var output = result.OutputTrimmed;
         LogsOutputBox.Text = output;
         if (logOutput)
@@ -167,10 +168,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task ReloadDesktopDevicesAsync(bool logOutput)
+    private async Task ReloadDesktopDevicesAsync(bool logOutput, CancellationToken cancellationToken = default)
     {
         var selectedName = GetSelectedDesktopDeviceValue();
-        var probe = await _launcher.ListDesktopDevicesAsync(WorkspaceBox.Text.Trim(), DevicesTimeout);
+        var probe = await _launcher.ListDesktopDevicesAsync(WorkspaceBox.Text.Trim(), DevicesTimeout, cancellationToken);
 
         var options = new List<DeviceOption>
         {
@@ -219,8 +220,13 @@ public partial class MainWindow : Window
 
             await RunWithLoadingAsync($"Ejecutando {action}:{profile}...", async () =>
             {
+                using var cts = new CancellationTokenSource(GetActionTimeout(action) + TimeSpan.FromSeconds(5));
                 var args = BuildActionArgs(action, profile, forceUpStartAndroidMic);
-                var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args, GetActionTimeout(action));
+                var result = await _launcher.RunAudioLinkAsync(
+                    WorkspaceBox.Text.Trim(),
+                    args,
+                    GetActionTimeout(action),
+                    cts.Token);
                 var output = result.OutputTrimmed;
 
                 if (!result.Success)
@@ -233,10 +239,10 @@ public partial class MainWindow : Window
                     AppendActionOutput(output);
                 }
 
-                await RefreshStatusAsync(logOutput: false);
+                await RefreshStatusAsync(logOutput: false, cts.Token);
                 if (refreshLogs && _currentMode == UiMode.Advanced)
                 {
-                    await ReloadLogsAsync(logOutput: false);
+                    await ReloadLogsAsync(logOutput: false, cts.Token);
                 }
             });
         }

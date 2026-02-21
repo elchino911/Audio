@@ -193,9 +193,21 @@ public sealed class LauncherService
         try
         {
             await process.WaitForExitAsync(cancellationToken);
+            await Task.WhenAll(stdOutTask, stdErrTask).WaitAsync(cancellationToken);
         }
         catch (OperationCanceledException ex)
         {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+            }
+
             if (timeout.HasValue && timeout.Value > TimeSpan.Zero)
             {
                 throw new TimeoutException(
@@ -205,8 +217,6 @@ public sealed class LauncherService
 
             throw;
         }
-
-        await Task.WhenAll(stdOutTask, stdErrTask);
 
         return new CommandResult(
             process.ExitCode == 0,
