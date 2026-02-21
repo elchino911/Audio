@@ -21,6 +21,12 @@
         <SolidColorBrush x:Key="TextMain" Color="#E6ECF8"/>
         <SolidColorBrush x:Key="TextSoft" Color="#ABB7D3"/>
         <SolidColorBrush x:Key="Primary" Color="#3B82F6"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#202B3D"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#E6ECF8"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#202B3D"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#E6ECF8"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#2F4B77"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
 
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
@@ -43,6 +49,42 @@
             <Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
             <Setter Property="Padding" Value="8,5"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+            <Setter Property="Background" Value="#202B3D"/>
+            <Setter Property="Padding" Value="7,4"/>
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Background" Value="#2F4B77"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#3B82F6"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+            <Setter Property="Background" Value="#2B3C57"/>
+            <Setter Property="BorderBrush" Value="#3D4E6B"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Background" Value="#7F1D1D"/>
+                    <Setter Property="BorderBrush" Value="#B91C1C"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
         <Style x:Key="ButtonStyle" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
@@ -107,8 +149,8 @@
                         <ToggleButton x:Name="MuteInputToggle" Content="Mute Entrada" Margin="0,0,8,0" Checked="MuteInputToggle_Checked" Unchecked="MuteInputToggle_Unchecked"/>
                         <ToggleButton x:Name="MuteOutputToggle" Content="Mute Salida" Margin="0,0,8,0" Checked="MuteOutputToggle_Checked" Unchecked="MuteOutputToggle_Unchecked"/>
                         <Button Content="Refresh" Style="{StaticResource GhostButtonStyle}" Click="RefreshStatusButton_Click"/>
-                        <Button Content="—" Width="30" Style="{StaticResource GhostButtonStyle}" Click="MinimizeButton_Click"/>
-                        <Button Content="✕" Width="30" Style="{StaticResource DangerButtonStyle}" Click="CloseButton_Click"/>
+                        <Button Content="-" Width="30" Style="{StaticResource GhostButtonStyle}" Click="MinimizeButton_Click"/>
+                        <Button Content="X" Width="30" Style="{StaticResource DangerButtonStyle}" Click="CloseButton_Click"/>
                     </StackPanel>
                 </Grid>
             </Border>
