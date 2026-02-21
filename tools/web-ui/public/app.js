@@ -31,7 +31,7 @@ async function apiGet(path) {
   const sep = path.includes("?") ? "&" : "?";
   const withToken = `${path}${sep}token=${encodeURIComponent(token)}`;
   const res = await fetch(withToken, { headers: header() });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw await makeHttpError(res);
   return res.json();
 }
 
@@ -42,8 +42,23 @@ async function apiPost(path, payload) {
     headers: header(),
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) throw await makeHttpError(res);
   return res.json();
+}
+
+async function makeHttpError(res) {
+  let detail = "";
+  try {
+    const data = await res.json();
+    if (data?.error) detail = String(data.error);
+  } catch {
+    try {
+      detail = (await res.text()).trim();
+    } catch {
+      detail = "";
+    }
+  }
+  return new Error(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
 }
 
 function readForm() {
@@ -139,6 +154,12 @@ async function runAction(action, profileOverride = null) {
   payload.action = action;
   if (profileOverride) payload.profile = profileOverride;
   try {
+    if (action === "start") {
+      const includeDown = payload.profile === "both" || payload.profile === "downlink";
+      if (includeDown && payload.down.mode === "network" && !payload.down.targetIp) {
+        throw new Error("Downlink en modo network requiere Target IP.");
+      }
+    }
     appendConsole(`action=${action} profile=${payload.profile}`);
     const data = await apiPost("/api/action", payload);
     if (data.output) appendConsole(data.output.trimEnd());
