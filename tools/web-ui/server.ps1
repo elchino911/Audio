@@ -400,12 +400,24 @@ function Invoke-AudioLinkAction {
     $output = ""
     $exitCode = 0
     try {
-        # Call script directly so argument boundaries are preserved
-        # (important for values with spaces/parentheses, e.g. output device names).
-        $invocation = & $AudioLinkScript @AudioLinkArgs 2>&1 | Out-String
-        $output = "$invocation"
-        if ($null -ne $LASTEXITCODE) {
-            $exitCode = [int]$LASTEXITCODE
+        # Invoke a child PowerShell with argument vector to preserve named args
+        # and values containing spaces/parentheses.
+        $cmdArgs = @(
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", $AudioLinkScript
+        ) + $AudioLinkArgs
+
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            $invocation = & powershell.exe @cmdArgs *>&1 | Out-String
+            $output = "$invocation"
+            if ($null -ne $LASTEXITCODE) {
+                $exitCode = [int]$LASTEXITCODE
+            }
+        } finally {
+            $ErrorActionPreference = $prevEap
         }
     } catch {
         $msg = $_ | Out-String
