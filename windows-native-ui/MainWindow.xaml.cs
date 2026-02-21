@@ -17,6 +17,9 @@ public partial class MainWindow : Window
 {
     private readonly LauncherService _launcher = new();
     private readonly DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(2.5) };
+    private static readonly TimeSpan StatusTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan LogsTimeout = TimeSpan.FromSeconds(25);
+    private static readonly TimeSpan DevicesTimeout = TimeSpan.FromSeconds(60);
 
     private readonly SolidColorBrush _runningBrush = new(Color.FromRgb(16, 185, 129));
     private readonly SolidColorBrush _stoppedBrush = new(Color.FromRgb(245, 158, 11));
@@ -125,7 +128,7 @@ public partial class MainWindow : Window
             "-Workspace", WorkspaceBox.Text.Trim()
         };
 
-        var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args);
+        var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args, StatusTimeout);
         var output = result.OutputTrimmed;
         if (!result.Success)
         {
@@ -153,7 +156,7 @@ public partial class MainWindow : Window
             "-Tail", tail
         };
 
-        var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args);
+        var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args, LogsTimeout);
         var output = result.OutputTrimmed;
         LogsOutputBox.Text = output;
         if (logOutput)
@@ -165,7 +168,7 @@ public partial class MainWindow : Window
     private async Task ReloadDesktopDevicesAsync(bool logOutput)
     {
         var selectedName = GetSelectedDesktopDeviceValue();
-        var probe = await _launcher.ListDesktopDevicesAsync(WorkspaceBox.Text.Trim());
+        var probe = await _launcher.ListDesktopDevicesAsync(WorkspaceBox.Text.Trim(), DevicesTimeout);
 
         var options = new List<DeviceOption>
         {
@@ -215,7 +218,7 @@ public partial class MainWindow : Window
             await RunWithLoadingAsync($"Ejecutando {action}:{profile}...", async () =>
             {
                 var args = BuildActionArgs(action, profile, forceUpStartAndroidMic);
-                var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args);
+                var result = await _launcher.RunAudioLinkAsync(WorkspaceBox.Text.Trim(), args, GetActionTimeout(action));
                 var output = result.OutputTrimmed;
 
                 if (!result.Success)
@@ -243,6 +246,20 @@ public partial class MainWindow : Window
         {
             _busy = false;
         }
+    }
+
+    private static TimeSpan GetActionTimeout(string action)
+    {
+        if (action.Equals("start", StringComparison.OrdinalIgnoreCase) ||
+            action.Equals("restart", StringComparison.OrdinalIgnoreCase))
+        {
+            return TimeSpan.FromSeconds(180);
+        }
+        if (action.Equals("stop", StringComparison.OrdinalIgnoreCase))
+        {
+            return TimeSpan.FromSeconds(45);
+        }
+        return TimeSpan.FromSeconds(30);
     }
 
     private void ValidateBeforeAction(string action, string profile)

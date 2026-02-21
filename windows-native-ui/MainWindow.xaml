@@ -49,6 +49,9 @@
             <Setter Property="BorderBrush" Value="{StaticResource Stroke}"/>
             <Setter Property="Padding" Value="8,5"/>
             <Setter Property="Margin" Value="0,0,0,10"/>
+            <Setter Property="IsEditable" Value="True"/>
+            <Setter Property="IsReadOnly" Value="True"/>
+            <Setter Property="TextElement.Foreground" Value="{StaticResource TextMain}"/>
         </Style>
         <Style TargetType="ComboBoxItem">
             <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
@@ -226,7 +229,7 @@
                                             <TextBlock Text="Target IP" Style="{StaticResource LabelStyle}"/><TextBox x:Name="DownTargetIpBox"/>
                                             <TextBlock Text="Source" Style="{StaticResource LabelStyle}"/><ComboBox x:Name="DownSourceCombo" SelectionChanged="DownSourceCombo_SelectionChanged"/>
                                             <TextBlock Text="Desktop Device" Style="{StaticResource LabelStyle}"/>
-                                            <DockPanel Margin="0,0,0,10"><Button x:Name="ReloadDesktopDevicesButton" DockPanel.Dock="Right" Content="Reload" Style="{StaticResource GhostButtonStyle}" Click="ReloadDesktopDevicesButton_Click" Margin="8,0,0,0"/><ComboBox x:Name="DownDesktopDeviceCombo" IsEditable="True"/></DockPanel>
+                                            <DockPanel Margin="0,0,0,10"><Button x:Name="ReloadDesktopDevicesButton" DockPanel.Dock="Right" Content="Reload" Style="{StaticResource GhostButtonStyle}" Click="ReloadDesktopDevicesButton_Click" Margin="8,0,0,0"/><ComboBox x:Name="DownDesktopDeviceCombo" IsEditable="True" IsReadOnly="False"/></DockPanel>
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" x:Name="DownAdvancedPanel">
                                             <TextBlock Text="Profile" Style="{StaticResource LabelStyle}"/><ComboBox x:Name="GlobalProfileCombo"/>

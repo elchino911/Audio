@@ -10,6 +10,7 @@ public sealed class LauncherService
     public async Task<CommandResult> RunAudioLinkAsync(
         string workspacePath,
         IReadOnlyList<string> audioLinkArgs,
+        TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
     {
         var scriptPath = Path.Combine(workspacePath, "tools", "launcher", "audio-link.ps1");
@@ -26,11 +27,23 @@ public sealed class LauncherService
         };
         args.AddRange(audioLinkArgs);
 
-        return await RunProcessAsync("powershell.exe", args, workspacePath, cancellationToken);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (timeout.HasValue && timeout.Value > TimeSpan.Zero)
+        {
+            cts.CancelAfter(timeout.Value);
+        }
+
+        return await RunProcessAsync(
+            "powershell.exe",
+            args,
+            workspacePath,
+            cts.Token,
+            timeout);
     }
 
     public async Task<DesktopDeviceProbeResult> ListDesktopDevicesAsync(
         string workspacePath,
+        TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
     {
         var senderDir = Path.Combine(workspacePath, "windows-sender");
@@ -52,7 +65,8 @@ public sealed class LauncherService
                 cargoExe,
                 new[] { "build", "--release" },
                 senderDir,
-                cancellationToken);
+                cancellationToken,
+                timeout);
 
             if (!build.Success || !File.Exists(senderExe))
             {
@@ -65,7 +79,8 @@ public sealed class LauncherService
             senderExe,
             new[] { "--list-desktop-devices" },
             senderDir,
-            cancellationToken);
+            cancellationToken,
+            timeout);
 
         if (!probe.Success)
         {
@@ -136,7 +151,8 @@ public sealed class LauncherService
         string fileName,
         IEnumerable<string> arguments,
         string workingDirectory,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        TimeSpan? timeout = null)
     {
         using var process = new Process();
         process.StartInfo.FileName = fileName;
@@ -178,8 +194,35 @@ public sealed class LauncherService
 
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
+        using var registration = cancellationToken.Register(() =>
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+            }
+        });
 
-        await process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException ex)
+        {
+            if (timeout.HasValue && timeout.Value > TimeSpan.Zero)
+            {
+                throw new TimeoutException(
+                    $"Tiempo de espera agotado ({(int)timeout.Value.TotalSeconds}s) al ejecutar comando.",
+                    ex);
+            }
+
+            throw;
+        }
 
         return new CommandResult(
             process.ExitCode == 0,
