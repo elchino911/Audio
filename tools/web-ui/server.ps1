@@ -1,6 +1,7 @@
 param(
     [string]$BindHost = "127.0.0.1",
     [int]$Port = 47831,
+    [int]$MaxPortShift = 30,
     [string]$Workspace = "",
     [switch]$OpenBrowser,
     [string]$Token = ""
@@ -296,10 +297,48 @@ if (-not $Token) {
     $Token = ""
 }
 
-$listener = New-Object System.Net.HttpListener
-$prefix = "http://${BindHost}:$Port/"
-$listener.Prefixes.Add($prefix)
-$listener.Start()
+$listener = $null
+$prefix = ""
+$lastStartError = $null
+
+for ($shift = 0; $shift -le $MaxPortShift; $shift++) {
+    $candidatePort = $Port + $shift
+    $candidatePrefix = "http://${BindHost}:$candidatePort/"
+    $candidateListener = New-Object System.Net.HttpListener
+    $candidateListener.Prefixes.Add($candidatePrefix)
+    try {
+        $candidateListener.Start()
+        $listener = $candidateListener
+        $Port = $candidatePort
+        $prefix = $candidatePrefix
+        if ($shift -gt 0) {
+            Write-Warning "Puerto solicitado ocupado. Se uso puerto alterno: $Port"
+        }
+        break
+    } catch [System.Net.HttpListenerException] {
+        $lastStartError = $_.Exception
+        $candidateListener.Close()
+        $msg = $lastStartError.Message.ToLowerInvariant()
+        if (
+            $msg.Contains("conflict") -or
+            $msg.Contains("conflicto") -or
+            $msg.Contains("existing")
+        ) {
+            continue
+        }
+        throw
+    } catch {
+        $candidateListener.Close()
+        throw
+    }
+}
+
+if (-not $listener) {
+    if ($lastStartError) {
+        throw "No se pudo iniciar HttpListener entre puertos $Port..$($Port + $MaxPortShift): $($lastStartError.Message)"
+    }
+    throw "No se pudo iniciar HttpListener."
+}
 
 Write-Host "Audio Link Web UI server activo en $prefix"
 if ($Token) {

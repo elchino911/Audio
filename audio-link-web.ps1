@@ -1,5 +1,6 @@
 param(
     [int]$Port = 47831,
+    [int]$MaxPortShift = 30,
     [string]$BindHost = "127.0.0.1",
     [string]$Workspace = "",
     [switch]$NoOpenBrowser,
@@ -16,6 +17,7 @@ if (-not (Test-Path $server)) {
 
 $args = @(
     "-Port", "$Port",
+    "-MaxPortShift", "$MaxPortShift",
     "-BindHost", "$BindHost"
 )
 if ($Workspace) { $args += @("-Workspace", $Workspace) }
