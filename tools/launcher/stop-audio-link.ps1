@@ -63,12 +63,75 @@ function Invoke-AdbSafe {
     }
 }
 
+function Is-ProcessRunning {
+    param([int]$ProcessId)
+    if ($ProcessId -le 0) { return $false }
+    try {
+        $null = Get-Process -Id $ProcessId -ErrorAction Stop
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Stop-ManagedProcess {
+    param(
+        [int]$ProcessId,
+        [string]$Label
+    )
+    if ($ProcessId -le 0) { return }
+
+    if (-not (Is-ProcessRunning -ProcessId $ProcessId)) {
+        Write-Host "$Label no estaba en ejecucion (PID $ProcessId)."
+        return
+    }
+
+    $stopErr = $null
+    try {
+        Stop-Process -Id $ProcessId -Force -ErrorAction Stop
+    } catch {
+        $stopErr = $_.Exception.Message
+        try {
+            & taskkill /PID $ProcessId /F /T 2>$null | Out-Null
+        } catch {
+        }
+    }
+
+    Start-Sleep -Milliseconds 120
+    if (Is-ProcessRunning -ProcessId $ProcessId) {
+        if (-not $stopErr) {
+            $stopErr = "proceso sigue en ejecucion tras intento de cierre"
+        }
+        throw "No se pudo detener $Label (PID $ProcessId): $stopErr"
+    }
+
+    Write-Host "$Label detenido (PID $ProcessId)."
+}
+
+function Stop-AllSendersBestEffort {
+    $senders = Get-Process -Name "windows-sender" -ErrorAction SilentlyContinue
+    if (-not $senders) {
+        return 0
+    }
+    $stopped = 0
+    foreach ($proc in $senders) {
+        Stop-ManagedProcess -ProcessId ([int]$proc.Id) -Label "Sender"
+        $stopped++
+    }
+    return $stopped
+}
+
 $workspacePath = Resolve-Workspace -ProvidedWorkspace $Workspace
 $runtimeDir = Join-Path $workspacePath "tools\launcher\.runtime"
 $statePath = Join-Path $runtimeDir "session.json"
 
 if (-not (Test-Path $statePath)) {
-    Write-Host "No hay sesion activa registrada."
+    $stopped = Stop-AllSendersBestEffort
+    if ($stopped -gt 0) {
+        Write-Host "No habia sesion registrada; se detuvieron $stopped proceso(s) windows-sender."
+    } else {
+        Write-Host "No hay sesion activa registrada."
+    }
     exit 0
 }
 
@@ -80,13 +143,17 @@ $deviceSerial = [string]$state.DeviceSerial
 $mode = [string]$state.Mode
 
 if ($watchdogPid -gt 0) {
-    Stop-Process -Id $watchdogPid -Force -ErrorAction SilentlyContinue
-    Write-Host "Watchdog detenido (PID $watchdogPid)."
+    Stop-ManagedProcess -ProcessId $watchdogPid -Label "Watchdog"
 }
 
 if ($senderPid -gt 0) {
-    Stop-Process -Id $senderPid -Force -ErrorAction SilentlyContinue
-    Write-Host "Sender detenido (PID $senderPid)."
+    Stop-ManagedProcess -ProcessId $senderPid -Label "Sender"
+}
+
+# Si quedaron senders huerfanos (sin estado), cerrarlos tambien.
+$extraStopped = Stop-AllSendersBestEffort
+if ($extraStopped -gt 0) {
+    Write-Host "Se detuvieron $extraStopped proceso(s) sender adicionales."
 }
 
 if ($deviceSerial) {
@@ -115,5 +182,5 @@ if ($deviceSerial) {
     }
 }
 
-Remove-Item $statePath -Force
+Remove-Item $statePath -Force -ErrorAction SilentlyContinue
 Write-Host "Sesion cerrada."

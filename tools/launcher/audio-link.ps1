@@ -245,10 +245,34 @@ function Stop-Uplink {
         [string]$WorkspacePath,
         [string]$Device
     )
+    $errors = New-Object System.Collections.Generic.List[string]
+
     $micArgs = @{}
     if ($Device) { $micArgs.DeviceSerial = $Device }
-    & $StopMicScript @micArgs
-    & $StopBridgeScript -Workspace $WorkspacePath
+    try {
+        & $StopMicScript @micArgs
+    } catch {
+        $msg = "$($_.Exception.Message)"
+        if (
+            $msg -match "No hay dispositivo Android fisico conectado por ADB" -or
+            $msg -match "no devices/emulators found" -or
+            $msg -match "device offline"
+        ) {
+            Write-Warning "No se pudo detener MicSenderService por ADB (dispositivo no disponible). Se continua con bridge."
+        } else {
+            $errors.Add("mic sender: $msg")
+        }
+    }
+
+    try {
+        & $StopBridgeScript -Workspace $WorkspacePath
+    } catch {
+        $errors.Add("windows bridge: $($_.Exception.Message)")
+    }
+
+    if ($errors.Count -gt 0) {
+        throw ($errors -join " | ")
+    }
 }
 
 $workspacePath = Resolve-Workspace -ProvidedWorkspace $Workspace
@@ -275,12 +299,25 @@ if (-not (Test-Path $runtimeDir)) {
 }
 
 if ($Action -eq "restart") {
+    $restartErrors = New-Object System.Collections.Generic.List[string]
     if (Include-Profile -CurrentProfile $Profile -Needle "uplink") {
-        Stop-Uplink -StopBridgeScript $stopBridgeScript -StopMicScript $stopMicScript -WorkspacePath $workspacePath -Device $DeviceSerial
+        try {
+            Stop-Uplink -StopBridgeScript $stopBridgeScript -StopMicScript $stopMicScript -WorkspacePath $workspacePath -Device $DeviceSerial
+        } catch {
+            $restartErrors.Add("uplink stop: $($_.Exception.Message)")
+        }
     }
     if (Include-Profile -CurrentProfile $Profile -Needle "downlink") {
-        Stop-Downlink -ScriptPath $stopDownlinkScript -WorkspacePath $workspacePath
+        try {
+            Stop-Downlink -ScriptPath $stopDownlinkScript -WorkspacePath $workspacePath
+        } catch {
+            $restartErrors.Add("downlink stop: $($_.Exception.Message)")
+        }
     }
+    if ($restartErrors.Count -gt 0) {
+        throw ("No se pudo completar restart (fase stop): " + ($restartErrors -join " | "))
+    }
+
     Start-Sleep -Milliseconds 300
     if (Include-Profile -CurrentProfile $Profile -Needle "downlink") {
         Start-Downlink -ScriptPath $startDownlinkScript -WorkspacePath $workspacePath -Device $DeviceSerial
@@ -301,11 +338,23 @@ switch ($Action) {
         }
     }
     "stop" {
+        $stopErrors = New-Object System.Collections.Generic.List[string]
         if (Include-Profile -CurrentProfile $Profile -Needle "uplink") {
-            Stop-Uplink -StopBridgeScript $stopBridgeScript -StopMicScript $stopMicScript -WorkspacePath $workspacePath -Device $DeviceSerial
+            try {
+                Stop-Uplink -StopBridgeScript $stopBridgeScript -StopMicScript $stopMicScript -WorkspacePath $workspacePath -Device $DeviceSerial
+            } catch {
+                $stopErrors.Add("uplink: $($_.Exception.Message)")
+            }
         }
         if (Include-Profile -CurrentProfile $Profile -Needle "downlink") {
-            Stop-Downlink -ScriptPath $stopDownlinkScript -WorkspacePath $workspacePath
+            try {
+                Stop-Downlink -ScriptPath $stopDownlinkScript -WorkspacePath $workspacePath
+            } catch {
+                $stopErrors.Add("downlink: $($_.Exception.Message)")
+            }
+        }
+        if ($stopErrors.Count -gt 0) {
+            throw ("No se pudo completar stop: " + ($stopErrors -join " | "))
         }
     }
     "status" {
