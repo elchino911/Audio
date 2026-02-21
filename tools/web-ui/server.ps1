@@ -530,7 +530,10 @@ function Parse-DesktopDeviceLines {
             }
         }
     }
-    return @($devices)
+    if ($devices.Count -eq 0) {
+        return @()
+    }
+    return $devices.ToArray()
 }
 
 function Get-DownlinkDesktopDevices {
