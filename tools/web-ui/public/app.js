@@ -9,6 +9,8 @@ const ui = {
   downInfo: el("downInfo"),
   upState: el("upState"),
   upInfo: el("upInfo"),
+  upMicState: el("upMicState"),
+  upMicInfo: el("upMicInfo"),
   logOut: el("logOut"),
   logErr: el("logErr"),
 };
@@ -113,6 +115,26 @@ function setStatus(status) {
     ? `${status.uplinkBridge.transport} port=${status.uplinkBridge.port} pid=${status.uplinkBridge.pid}`
     : "sin bridge activo";
 
+  if (status.uplinkMic && status.uplinkMic.runningKnown) {
+    setRunPill(ui.upMicState, !!status.uplinkMic.running);
+  } else {
+    ui.upMicState.classList.remove("running", "stopped");
+    ui.upMicState.classList.add("warn");
+    ui.upMicState.textContent = "unknown";
+  }
+  if (status.uplinkMic) {
+    const s = status.uplinkMic;
+    const parts = [];
+    if (s.deviceSerial) parts.push(`serial=${s.deviceSerial}`);
+    if (s.targetIp && s.port) parts.push(`${s.targetIp}:${s.port}`);
+    if (s.mode) parts.push(`mode=${s.mode}`);
+    if (s.transport) parts.push(s.transport);
+    if (s.hint) parts.push(s.hint);
+    ui.upMicInfo.textContent = parts.join(" | ") || "sin datos";
+  } else {
+    ui.upMicInfo.textContent = "sin datos";
+  }
+
   ui.serverHint.textContent = `Servidor: ${status.server.host}:${status.server.port}`;
 }
 
@@ -162,6 +184,9 @@ async function runAction(action, profileOverride = null) {
     }
     appendConsole(`action=${action} profile=${payload.profile}`);
     const data = await apiPost("/api/action", payload);
+    if (action === "status") {
+      ui.console.textContent = "";
+    }
     if (data.output) appendConsole(data.output.trimEnd());
     setStatus(data.status);
     await refreshLogs();

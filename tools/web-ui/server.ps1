@@ -41,6 +41,45 @@ function Read-JsonOrNull {
     }
 }
 
+function Resolve-AdbExe {
+    $cmd = Get-Command "adb" -ErrorAction SilentlyContinue
+    if ($cmd) {
+        return $cmd.Source
+    }
+    $fallback = Join-Path $env:USERPROFILE "AppData\Local\Android\Sdk\platform-tools\adb.exe"
+    if (Test-Path $fallback) {
+        return $fallback
+    }
+    return $null
+}
+
+function Test-MicSenderServiceRunning {
+    param(
+        [string]$AdbExe,
+        [string]$DeviceSerial
+    )
+    if (-not $AdbExe -or -not $DeviceSerial) {
+        return $null
+    }
+    try {
+        $out = & $AdbExe -s $DeviceSerial shell dumpsys activity services com.audiolink.receiver/.MicSenderService 2>$null | Out-String
+        if (-not $out) { return $null }
+        if ($out -match "ServiceRecord\{" -and $out -match "MicSenderService") {
+            return $true
+        }
+        if (
+            $out -match "No services match" -or
+            $out -match "Nothing to dump" -or
+            $out -match "not found"
+        ) {
+            return $false
+        }
+        return $null
+    } catch {
+        return $null
+    }
+}
+
 function Get-StatusObject {
     param(
         [string]$WorkspacePath,
@@ -48,8 +87,21 @@ function Get-StatusObject {
     )
     $downStatePath = Join-Path $RuntimeDir "session.json"
     $bridgeStatePath = Join-Path $RuntimeDir "mic-bridge.session.json"
+    $micStatePath = Join-Path $RuntimeDir "mic-sender.session.json"
     $downState = Read-JsonOrNull -Path $downStatePath
     $bridgeState = Read-JsonOrNull -Path $bridgeStatePath
+    $micState = Read-JsonOrNull -Path $micStatePath
+    function Get-StateProp {
+        param(
+            [object]$Obj,
+            [string]$Name,
+            [object]$Default = $null
+        )
+        if ($null -eq $Obj) { return $Default }
+        $p = $Obj.PSObject.Properties[$Name]
+        if ($null -eq $p) { return $Default }
+        return $p.Value
+    }
 
     $down = $null
     if ($downState) {
@@ -99,14 +151,47 @@ function Get-StatusObject {
         }
     }
 
+    $mic = [ordered]@{
+        running = $false
+        runningKnown = $false
+        deviceSerial = ""
+        targetIp = ""
+        port = 0
+        transport = ""
+        mode = ""
+        startedAt = ""
+        hint = "Revisa logcat tag MicSenderService"
+    }
+    if ($micState) {
+        $micSerial = "$((Get-StateProp -Obj $micState -Name 'DeviceSerial' -Default ''))"
+        if (-not $micSerial -and $downState -and $downState.DeviceSerial) {
+            $micSerial = "$($downState.DeviceSerial)"
+        }
+
+        $mic.runningKnown = $false
+        $micRunningProbe = Test-MicSenderServiceRunning -AdbExe (Resolve-AdbExe) -DeviceSerial $micSerial
+        if ($null -ne $micRunningProbe) {
+            $mic.runningKnown = $true
+            $mic.running = [bool]$micRunningProbe
+        }
+
+        $mic.deviceSerial = $micSerial
+        $mic.targetIp = "$((Get-StateProp -Obj $micState -Name 'TargetIp' -Default ''))"
+        $mic.port = [int](Get-StateProp -Obj $micState -Name 'Port' -Default 0)
+        $mic.transport = "$((Get-StateProp -Obj $micState -Name 'Transport' -Default ''))"
+        $mic.mode = "$((Get-StateProp -Obj $micState -Name 'MicSource' -Default ''))"
+        $mic.startedAt = "$((Get-StateProp -Obj $micState -Name 'StartedAt' -Default ''))"
+        if ($mic.runningKnown) {
+            $mic.hint = if ($mic.running) { "MicSenderService activo" } else { "MicSenderService detenido" }
+        }
+    }
+
     return [ordered]@{
         workspace = $WorkspacePath
         runtimeDir = $RuntimeDir
         downlink = $down
         uplinkBridge = $bridge
-        uplinkMic = [ordered]@{
-            hint = "Revisa logcat tag MicSenderService"
-        }
+        uplinkMic = $mic
         logFiles = [ordered]@{
             downOut = (Join-Path $RuntimeDir "sender.log")
             downErr = (Join-Path $RuntimeDir "sender.err.log")
