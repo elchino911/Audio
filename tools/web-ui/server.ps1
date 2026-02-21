@@ -181,11 +181,23 @@ function Build-AudioLinkArgsFromPayload {
         [pscustomobject]$Payload,
         [string]$WorkspacePath
     )
-    $action = "$($Payload.action)".ToLowerInvariant()
+    function Get-Prop {
+        param(
+            [object]$Obj,
+            [string]$Name,
+            [object]$Default = $null
+        )
+        if ($null -eq $Obj) { return $Default }
+        $prop = $Obj.PSObject.Properties[$Name]
+        if ($null -eq $prop) { return $Default }
+        return $prop.Value
+    }
+
+    $action = "$((Get-Prop -Obj $Payload -Name 'action' -Default ''))".ToLowerInvariant()
     if ($action -notin @("start", "stop", "restart", "status", "logs")) {
         throw "action invalida: '$action'"
     }
-    $profile = "$($Payload.profile)".ToLowerInvariant()
+    $profile = "$((Get-Prop -Obj $Payload -Name 'profile' -Default ''))".ToLowerInvariant()
     if ($profile -eq "") { $profile = "both" }
     if ($profile -notin @("both", "downlink", "uplink")) {
         throw "profile invalido: '$profile'"
@@ -197,42 +209,71 @@ function Build-AudioLinkArgsFromPayload {
         "-Workspace", $WorkspacePath
     )
 
-    if ($Payload.deviceSerial) {
-        $args += @("-DeviceSerial", "$($Payload.deviceSerial)")
+    $deviceSerial = Get-Prop -Obj $Payload -Name "deviceSerial" -Default ""
+    if ($deviceSerial) {
+        $args += @("-DeviceSerial", "$deviceSerial")
     }
 
-    if ($Payload.down) {
-        $down = $Payload.down
-        if ($down.mode) { $args += @("-DownMode", "$($down.mode)") }
-        if ($down.targetIp) { $args += @("-DownTargetIp", "$($down.targetIp)") }
-        if ($down.port) { $args += @("-DownPort", "$($down.port)") }
-        if ($down.frameMs) { $args += @("-DownFrameMs", "$($down.frameMs)") }
-        if ($down.jitterMs) { $args += @("-DownJitterMs", "$($down.jitterMs)") }
-        if ($down.source) { $args += @("-DownSource", "$($down.source)") }
-        if ($down.transport) { $args += @("-DownTransport", "$($down.transport)") }
-        if ($down.desktopDevice) { $args += @("-DownDesktopDevice", "$($down.desktopDevice)") }
-        if ($down.skipBuild -eq $true) { $args += "-DownSkipBuild" }
-        if ($down.skipReceiverStart -eq $true) { $args += "-DownSkipReceiverStart" }
-        if ($null -ne $down.autoReconnectUsb) { $args += @("-DownAutoReconnectUsb", "$($down.autoReconnectUsb)") }
-        if ($down.usbWatchdogIntervalMs) { $args += @("-DownUsbWatchdogIntervalMs", "$($down.usbWatchdogIntervalMs)") }
+    $down = Get-Prop -Obj $Payload -Name "down"
+    if ($down) {
+        $downMode = Get-Prop -Obj $down -Name "mode" -Default ""
+        $downTargetIp = Get-Prop -Obj $down -Name "targetIp" -Default ""
+        $downPort = Get-Prop -Obj $down -Name "port"
+        $downFrameMs = Get-Prop -Obj $down -Name "frameMs"
+        $downJitterMs = Get-Prop -Obj $down -Name "jitterMs"
+        $downSource = Get-Prop -Obj $down -Name "source" -Default ""
+        $downTransport = Get-Prop -Obj $down -Name "transport" -Default ""
+        $downDesktopDevice = Get-Prop -Obj $down -Name "desktopDevice" -Default ""
+        $downSkipBuild = Get-Prop -Obj $down -Name "skipBuild" -Default $false
+        $downSkipReceiverStart = Get-Prop -Obj $down -Name "skipReceiverStart" -Default $false
+        $downAutoReconnectUsb = Get-Prop -Obj $down -Name "autoReconnectUsb"
+        $downUsbWatchdogIntervalMs = Get-Prop -Obj $down -Name "usbWatchdogIntervalMs"
+
+        if ($downMode) { $args += @("-DownMode", "$downMode") }
+        if ($downTargetIp) { $args += @("-DownTargetIp", "$downTargetIp") }
+        if ($downPort) { $args += @("-DownPort", "$downPort") }
+        if ($downFrameMs) { $args += @("-DownFrameMs", "$downFrameMs") }
+        if ($downJitterMs) { $args += @("-DownJitterMs", "$downJitterMs") }
+        if ($downSource) { $args += @("-DownSource", "$downSource") }
+        if ($downTransport) { $args += @("-DownTransport", "$downTransport") }
+        if ($downDesktopDevice) { $args += @("-DownDesktopDevice", "$downDesktopDevice") }
+        if ($downSkipBuild -eq $true) { $args += "-DownSkipBuild" }
+        if ($downSkipReceiverStart -eq $true) { $args += "-DownSkipReceiverStart" }
+        if ($null -ne $downAutoReconnectUsb) { $args += @("-DownAutoReconnectUsb", "$downAutoReconnectUsb") }
+        if ($downUsbWatchdogIntervalMs) { $args += @("-DownUsbWatchdogIntervalMs", "$downUsbWatchdogIntervalMs") }
     }
 
-    if ($Payload.up) {
-        $up = $Payload.up
-        if ($up.targetIp) { $args += @("-UpTargetIp", "$($up.targetIp)") }
-        if ($up.port) { $args += @("-UpPort", "$($up.port)") }
-        if ($up.frameMs) { $args += @("-UpFrameMs", "$($up.frameMs)") }
-        if ($up.transport) { $args += @("-UpTransport", "$($up.transport)") }
-        if ($up.micSource) { $args += @("-UpMicSource", "$($up.micSource)") }
-        if ($up.outputDevice) { $args += @("-UpOutputDevice", "$($up.outputDevice)") }
-        if ($up.targetBufferMs) { $args += @("-UpTargetBufferMs", "$($up.targetBufferMs)") }
-        if ($up.maxBufferMs) { $args += @("-UpMaxBufferMs", "$($up.maxBufferMs)") }
-        if ($up.skipBuildBridge -eq $true) { $args += "-UpSkipBuildBridge" }
-        if ($up.noRestartMic -eq $true) { $args += "-UpNoRestartMic" }
+    $up = Get-Prop -Obj $Payload -Name "up"
+    if ($up) {
+        $upTargetIp = Get-Prop -Obj $up -Name "targetIp" -Default ""
+        $upPort = Get-Prop -Obj $up -Name "port"
+        $upFrameMs = Get-Prop -Obj $up -Name "frameMs"
+        $upTransport = Get-Prop -Obj $up -Name "transport" -Default ""
+        $upMicSource = Get-Prop -Obj $up -Name "micSource" -Default ""
+        $upOutputDevice = Get-Prop -Obj $up -Name "outputDevice" -Default ""
+        $upTargetBufferMs = Get-Prop -Obj $up -Name "targetBufferMs"
+        $upMaxBufferMs = Get-Prop -Obj $up -Name "maxBufferMs"
+        $upSkipBuildBridge = Get-Prop -Obj $up -Name "skipBuildBridge" -Default $false
+        $upNoRestartMic = Get-Prop -Obj $up -Name "noRestartMic" -Default $false
+
+        if ($upTargetIp) { $args += @("-UpTargetIp", "$upTargetIp") }
+        if ($upPort) { $args += @("-UpPort", "$upPort") }
+        if ($upFrameMs) { $args += @("-UpFrameMs", "$upFrameMs") }
+        if ($upTransport) { $args += @("-UpTransport", "$upTransport") }
+        if ($upMicSource) { $args += @("-UpMicSource", "$upMicSource") }
+        if ($upOutputDevice) { $args += @("-UpOutputDevice", "$upOutputDevice") }
+        if ($upTargetBufferMs) { $args += @("-UpTargetBufferMs", "$upTargetBufferMs") }
+        if ($upMaxBufferMs) { $args += @("-UpMaxBufferMs", "$upMaxBufferMs") }
+        if ($upSkipBuildBridge -eq $true) { $args += "-UpSkipBuildBridge" }
+        if ($upNoRestartMic -eq $true) { $args += "-UpNoRestartMic" }
     }
 
-    if ($Payload.logs -and $Payload.logs.tail) {
-        $args += @("-Tail", "$($Payload.logs.tail)")
+    $logs = Get-Prop -Obj $Payload -Name "logs"
+    if ($logs) {
+        $tail = Get-Prop -Obj $logs -Name "tail"
+        if ($tail) {
+            $args += @("-Tail", "$tail")
+        }
     }
 
     return $args
