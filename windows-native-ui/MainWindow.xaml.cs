@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private static readonly TimeSpan StatusTimeout = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan LogsTimeout = TimeSpan.FromSeconds(25);
     private static readonly TimeSpan DevicesTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan HardUiActionTimeout = TimeSpan.FromSeconds(28);
 
     private readonly SolidColorBrush _runningBrush = new(Color.FromRgb(16, 185, 129));
     private readonly SolidColorBrush _stoppedBrush = new(Color.FromRgb(245, 158, 11));
@@ -214,13 +215,16 @@ public partial class MainWindow : Window
         }
 
         _busy = true;
+        SetLoading(true, $"Ejecutando {action}:{profile}...");
         try
         {
             ValidateBeforeAction(action, profile);
 
-            await RunWithLoadingAsync($"Ejecutando {action}:{profile}...", async () =>
+            using var hardCts = new CancellationTokenSource(HardUiActionTimeout);
+            await Task.Run(async () =>
             {
-                using var cts = new CancellationTokenSource(GetActionTimeout(action) + TimeSpan.FromSeconds(5));
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(hardCts.Token);
+                cts.CancelAfter(GetActionTimeout(action) + TimeSpan.FromSeconds(5));
                 var args = BuildActionArgs(action, profile, forceUpStartAndroidMic);
                 CommandResult result;
                 string output;
@@ -244,6 +248,17 @@ public partial class MainWindow : Window
                     await RefreshStatusAsync(logOutput: false);
                     return;
                 }
+                catch (OperationCanceledException)
+                {
+                    var applied = await VerifyStateAfterTimeoutAsync(action, profile);
+                    if (!applied)
+                    {
+                        throw new TimeoutException($"Tiempo agotado en accion {action}:{profile}.");
+                    }
+                    AppendActionOutput($"Aviso: accion {action}:{profile} se aplico pero la respuesta no llego a tiempo.");
+                    await RefreshStatusAsync(logOutput: false);
+                    return;
+                }
 
                 if (!result.Success)
                 {
@@ -260,7 +275,15 @@ public partial class MainWindow : Window
                 {
                     await ReloadLogsAsync(logOutput: false, cts.Token);
                 }
-            });
+            }, hardCts.Token);
+        }
+        catch (TimeoutException ex)
+        {
+            AppendActionOutput($"ERROR: {ex.Message}");
+        }
+        catch (OperationCanceledException)
+        {
+            AppendActionOutput($"ERROR: Tiempo agotado en accion {action}:{profile}.");
         }
         catch (Exception ex)
         {
@@ -268,6 +291,7 @@ public partial class MainWindow : Window
         }
         finally
         {
+            SetLoading(false, string.Empty);
             _busy = false;
         }
     }
