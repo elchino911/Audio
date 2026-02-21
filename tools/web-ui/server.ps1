@@ -369,13 +369,32 @@ function Invoke-AudioLinkAction {
         [string]$AudioLinkScript,
         [string[]]$AudioLinkArgs
     )
-    $cmdArgs = @(
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-File", $AudioLinkScript
-    ) + $AudioLinkArgs
-    $output = & powershell @cmdArgs 2>&1 | Out-String
-    $exitCode = $LASTEXITCODE
+    $tmpDir = [System.IO.Path]::GetTempPath()
+    $stdoutPath = Join-Path $tmpDir ("audio-link-out-{0}.log" -f ([System.Guid]::NewGuid().ToString("N")))
+    $stderrPath = Join-Path $tmpDir ("audio-link-err-{0}.log" -f ([System.Guid]::NewGuid().ToString("N")))
+    try {
+        $cmdArgs = @(
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
+            "-File", $AudioLinkScript
+        ) + $AudioLinkArgs
+        $proc = Start-Process `
+            -FilePath "powershell.exe" `
+            -ArgumentList $cmdArgs `
+            -PassThru `
+            -Wait `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        $stdout = if (Test-Path $stdoutPath) { Get-Content $stdoutPath -ErrorAction SilentlyContinue } else { @() }
+        $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -ErrorAction SilentlyContinue } else { @() }
+        $output = @($stdout + $stderr) | Out-String
+        $exitCode = $proc.ExitCode
+    } finally {
+        if (Test-Path $stdoutPath) { Remove-Item $stdoutPath -Force -ErrorAction SilentlyContinue }
+        if (Test-Path $stderrPath) { Remove-Item $stderrPath -Force -ErrorAction SilentlyContinue }
+    }
     return @{
         Output = $output
         ExitCode = $exitCode
