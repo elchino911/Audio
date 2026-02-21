@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Audio Link Web UI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="bg"></div>
+  <main class="app">
+    <header class="top">
+      <div>
+        <h1>Audio Link Control</h1>
+        <p id="serverHint">Conectando...</p>
+      </div>
+      <div class="actions">
+        <button id="btnRefresh" class="ghost">Refresh</button>
+        <button id="btnStartAll">Start All</button>
+        <button id="btnStopAll" class="danger">Stop All</button>
+      </div>
+    </header>
+
+    <section class="status-grid">
+      <article class="status-card">
+        <h3>Downlink</h3>
+        <p id="downState" class="pill stopped">stopped</p>
+        <p id="downInfo" class="mono">-</p>
+      </article>
+      <article class="status-card">
+        <h3>Uplink Bridge</h3>
+        <p id="upState" class="pill stopped">stopped</p>
+        <p id="upInfo" class="mono">-</p>
+      </article>
+      <article class="status-card">
+        <h3>Uplink Mic</h3>
+        <p class="pill warn">external</p>
+        <p class="mono">Revisa logcat: <code>MicSenderService</code></p>
+      </article>
+    </section>
+
+    <section class="forms">
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Downlink</h2>
+          <div class="inline-buttons">
+            <button id="btnStartDown">Start</button>
+            <button id="btnStopDown" class="ghost">Stop</button>
+          </div>
+        </div>
+        <div class="grid two">
+          <label>Profile
+            <select id="profile">
+              <option value="both">both</option>
+              <option value="downlink">downlink</option>
+              <option value="uplink">uplink</option>
+            </select>
+          </label>
+          <label>Device Serial
+            <input id="deviceSerial" type="text" placeholder="344b5d65" />
+          </label>
+          <label>Mode
+            <select id="downMode">
+              <option value="network">network</option>
+              <option value="usb">usb</option>
+            </select>
+          </label>
+          <label>Target IP
+            <input id="downTargetIp" type="text" placeholder="192.168.100.49" />
+          </label>
+          <label>Port
+            <select id="downPort">
+              <option>50000</option>
+            </select>
+          </label>
+          <label>Frame ms
+            <select id="downFrame">
+              <option>2</option><option selected>5</option><option>10</option><option>15</option><option>20</option>
+            </select>
+          </label>
+          <label>Jitter ms
+            <select id="downJitter">
+              <option>10</option><option>15</option><option selected>20</option><option>25</option><option>30</option><option>35</option><option>40</option><option>50</option>
+            </select>
+          </label>
+          <label>Source
+            <select id="downSource">
+              <option value="desktop">desktop</option>
+              <option value="mic">mic</option>
+            </select>
+          </label>
+          <label>Transport
+            <select id="downTransport">
+              <option value="udp">udp</option>
+              <option value="tcp">tcp</option>
+            </select>
+          </label>
+          <label>Desktop Device
+            <input id="downDesktopDevice" type="text" placeholder="(opcional)" />
+          </label>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Uplink</h2>
+          <div class="inline-buttons">
+            <button id="btnStartUp">Start</button>
+            <button id="btnStopUp" class="ghost">Stop</button>
+          </div>
+        </div>
+        <div class="grid two">
+          <label>Target IP
+            <input id="upTargetIp" type="text" placeholder="192.168.100.17" />
+          </label>
+          <label>Port
+            <select id="upPort">
+              <option selected>50010</option>
+            </select>
+          </label>
+          <label>Frame ms
+            <select id="upFrame">
+              <option>2</option><option selected>5</option><option>10</option><option>15</option><option>20</option>
+            </select>
+          </label>
+          <label>Transport
+            <select id="upTransport">
+              <option value="tcp" selected>tcp</option>
+              <option value="udp">udp</option>
+            </select>
+          </label>
+          <label>Mic Source
+            <select id="upMicSource">
+              <option value="auto" selected>auto</option>
+              <option value="phone">phone</option>
+              <option value="bluetooth">bluetooth</option>
+            </select>
+          </label>
+          <label>Output Device
+            <input id="upOutputDevice" type="text" value="CABLE Input (VB-Audio Virtual Cable)" />
+          </label>
+          <label>Target Buffer ms
+            <select id="upTargetBuffer">
+              <option>30</option><option selected>50</option><option>80</option><option>100</option>
+            </select>
+          </label>
+          <label>Max Buffer ms
+            <select id="upMaxBuffer">
+              <option>150</option><option selected>250</option><option>500</option><option>1000</option>
+            </select>
+          </label>
+        </div>
+      </article>
+    </section>
+
+    <section class="logs">
+      <div class="panel-head">
+        <h2>Logs</h2>
+        <div class="inline-buttons">
+          <select id="logsProfile">
+            <option value="both">both</option>
+            <option value="downlink">downlink</option>
+            <option value="uplink">uplink</option>
+          </select>
+          <select id="logsTail">
+            <option>40</option>
+            <option selected>80</option>
+            <option>120</option>
+            <option>200</option>
+          </select>
+          <label class="checkbox"><input id="autoRefreshLogs" type="checkbox" checked /> auto</label>
+          <button id="btnLogs">Reload</button>
+        </div>
+      </div>
+      <div class="log-columns">
+        <article>
+          <h4>stdout</h4>
+          <pre id="logOut"></pre>
+        </article>
+        <article>
+          <h4>stderr</h4>
+          <pre id="logErr"></pre>
+        </article>
+      </div>
+    </section>
+
+    <section class="console">
+      <h2>Action Output</h2>
+      <pre id="console"></pre>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
