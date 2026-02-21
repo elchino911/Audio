@@ -210,6 +210,8 @@ public partial class MainWindow : Window
         _busy = true;
         try
         {
+            ValidateBeforeAction(action, profile);
+
             await RunWithLoadingAsync($"Ejecutando {action}:{profile}...", async () =>
             {
                 var args = BuildActionArgs(action, profile, forceUpStartAndroidMic);
@@ -218,7 +220,7 @@ public partial class MainWindow : Window
 
                 if (!result.Success)
                 {
-                    throw new InvalidOperationException(output);
+                    throw new InvalidOperationException(ExtractFriendlyError(output));
                 }
 
                 if (!string.IsNullOrWhiteSpace(output))
@@ -241,6 +243,61 @@ public partial class MainWindow : Window
         {
             _busy = false;
         }
+    }
+
+    private void ValidateBeforeAction(string action, string profile)
+    {
+        if (!action.Equals("start", StringComparison.OrdinalIgnoreCase) &&
+            !action.Equals("restart", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var includeDown = profile.Equals("both", StringComparison.OrdinalIgnoreCase) ||
+                          profile.Equals("downlink", StringComparison.OrdinalIgnoreCase);
+        if (!includeDown)
+        {
+            return;
+        }
+
+        var downMode = SelectedText(DownModeCombo, "network");
+        var downIp = DownTargetIpBox.Text.Trim();
+        if (downMode.Equals("network", StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrWhiteSpace(downIp))
+        {
+            throw new InvalidOperationException("Downlink en modo network requiere Target IP (IP del Android receptor).");
+        }
+    }
+
+    private static string ExtractFriendlyError(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "Error desconocido.";
+        }
+
+        var text = raw.Replace('\r', '\n');
+        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim())
+            .Where(l => !string.IsNullOrWhiteSpace(l))
+            .ToList();
+
+        if (lines.Count == 0)
+        {
+            return "Error desconocido.";
+        }
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("No se pudo completar", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("Downlink en modo", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("Uplink requiere", StringComparison.OrdinalIgnoreCase))
+            {
+                return line;
+            }
+        }
+
+        return lines[0];
     }
 
     private List<string> BuildActionArgs(string action, string profile, bool? forceUpStartAndroidMic)
