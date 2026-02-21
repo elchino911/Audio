@@ -108,6 +108,29 @@ function Save-State {
     $State | ConvertTo-Json | Set-Content -Path $StatePath -Encoding UTF8
 }
 
+function Reset-LogFileBestEffort {
+    param(
+        [string]$Path,
+        [int]$Retries = 15,
+        [int]$DelayMs = 120
+    )
+    if (-not (Test-Path $Path)) {
+        return
+    }
+    for ($i = 0; $i -le $Retries; $i++) {
+        try {
+            Remove-Item -Path $Path -Force -ErrorAction Stop
+            return
+        } catch {
+            if ($i -ge $Retries) {
+                Write-Warning "No se pudo limpiar log bloqueado: $Path. Continuando."
+                return
+            }
+            Start-Sleep -Milliseconds $DelayMs
+        }
+    }
+}
+
 function Invoke-AdbSafe {
     param(
         [string]$AdbExe,
@@ -169,8 +192,8 @@ if (-not (Test-Path $senderDir)) {
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 Stop-ExistingSession -StatePath $statePath
 
-if (Test-Path $senderLog) { Remove-Item $senderLog -Force }
-if (Test-Path $senderErrLog) { Remove-Item $senderErrLog -Force }
+Reset-LogFileBestEffort -Path $senderLog
+Reset-LogFileBestEffort -Path $senderErrLog
 
 if ($Mode -eq "usb") {
     $effectiveTransport = "tcp"
