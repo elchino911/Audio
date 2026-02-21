@@ -277,6 +277,33 @@ function Build-AudioLinkArgsFromPayload {
         if ($null -eq $prop) { return $Default }
         return $prop.Value
     }
+    function Normalize-BoolCliValue {
+        param([object]$Value)
+        if ($null -eq $Value) { return $null }
+        if ($Value -is [bool]) {
+            return $(if ($Value) { "1" } else { "0" })
+        }
+        if (
+            $Value -is [byte] -or
+            $Value -is [sbyte] -or
+            $Value -is [int16] -or
+            $Value -is [uint16] -or
+            $Value -is [int32] -or
+            $Value -is [uint32] -or
+            $Value -is [int64] -or
+            $Value -is [uint64]
+        ) {
+            return $(if ([int64]$Value -ne 0) { "1" } else { "0" })
+        }
+        $text = "$Value".Trim().ToLowerInvariant()
+        switch ($text) {
+            "true" { return "1" }
+            "false" { return "0" }
+            "1" { return "1" }
+            "0" { return "0" }
+            default { return $null }
+        }
+    }
 
     $action = "$((Get-Prop -Obj $Payload -Name 'action' -Default ''))".ToLowerInvariant()
     if ($action -notin @("start", "stop", "restart", "status", "logs")) {
@@ -324,7 +351,8 @@ function Build-AudioLinkArgsFromPayload {
         if ($downDesktopDevice) { $args += @("-DownDesktopDevice", "$downDesktopDevice") }
         if ($downSkipBuild -eq $true) { $args += "-DownSkipBuild" }
         if ($downSkipReceiverStart -eq $true) { $args += "-DownSkipReceiverStart" }
-        if ($null -ne $downAutoReconnectUsb) { $args += @("-DownAutoReconnectUsb", "$downAutoReconnectUsb") }
+        $downAutoReconnectUsbCli = Normalize-BoolCliValue -Value $downAutoReconnectUsb
+        if ($null -ne $downAutoReconnectUsbCli) { $args += @("-DownAutoReconnectUsb", $downAutoReconnectUsbCli) }
         if ($downUsbWatchdogIntervalMs) { $args += @("-DownUsbWatchdogIntervalMs", "$downUsbWatchdogIntervalMs") }
     }
 
