@@ -225,6 +225,7 @@ function Is-TransientAdbUsbError {
 
 $workspacePath = Resolve-Workspace -ProvidedWorkspace $Workspace
 $senderDir = Join-Path $workspacePath "windows-sender"
+$senderProject = Join-Path $senderDir "Cargo.toml"
 $senderExe = Join-Path $senderDir "target\release\windows-sender.exe"
 $runtimeDir = Join-Path $workspacePath "tools\launcher\.runtime"
 $statePath = Join-Path $runtimeDir "session.json"
@@ -279,7 +280,7 @@ if ($Mode -eq "usb") {
     }
 }
 
-if (-not $SkipBuild -or -not (Test-Path $senderExe)) {
+if ((-not $SkipBuild -or -not (Test-Path $senderExe)) -and (Test-Path $senderProject)) {
     $cargoExe = Resolve-Exe -CommandName "cargo" -FallbackPaths @(
         "$env:USERPROFILE\.cargo\bin\cargo.exe"
     )
@@ -294,6 +295,10 @@ if (-not $SkipBuild -or -not (Test-Path $senderExe)) {
 
 if (-not (Test-Path $senderExe)) {
     throw "No se encontro binario sender: $senderExe"
+}
+
+if ((-not (Test-Path $senderProject)) -and (-not $SkipBuild)) {
+    Write-Host "Usando sender precompilado del paquete: $senderExe"
 }
 
 if ($Mode -eq "usb") {

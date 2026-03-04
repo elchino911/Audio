@@ -114,17 +114,26 @@ function Ensure-JavaForGradle {
 $workspacePath = Resolve-Workspace -ProvidedWorkspace $Workspace
 $outRoot = if ($OutDir) { $OutDir } else { Join-Path $workspacePath "dist" }
 $senderDir = Join-Path $workspacePath "windows-sender"
+$receiverDir = Join-Path $workspacePath "windows-receiver"
 $androidDir = Join-Path $workspacePath "android-receiver"
 $senderExe = Join-Path $senderDir "target\release\windows-sender.exe"
+$receiverExe = Join-Path $receiverDir "target\release\windows-receiver.exe"
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $packageDir = Join-Path $outRoot ("audio-link-v1-personal-{0}" -f $timestamp)
-$windowsOutDir = Join-Path $packageDir "windows"
+$senderOutDir = Join-Path $packageDir "windows-sender\target\release"
+$receiverOutDir = Join-Path $packageDir "windows-receiver\target\release"
 $androidOutDir = Join-Path $packageDir "android"
 $toolsOutDir = Join-Path $packageDir "tools"
+$launcherOutDir = Join-Path $toolsOutDir "launcher"
+$webUiOutDir = Join-Path $toolsOutDir "web-ui"
+$webUiPublicOutDir = Join-Path $webUiOutDir "public"
 
-New-Item -ItemType Directory -Path $windowsOutDir -Force | Out-Null
+New-Item -ItemType Directory -Path $senderOutDir -Force | Out-Null
+New-Item -ItemType Directory -Path $receiverOutDir -Force | Out-Null
 New-Item -ItemType Directory -Path $androidOutDir -Force | Out-Null
 New-Item -ItemType Directory -Path $toolsOutDir -Force | Out-Null
+New-Item -ItemType Directory -Path $launcherOutDir -Force | Out-Null
+New-Item -ItemType Directory -Path $webUiPublicOutDir -Force | Out-Null
 
 if (-not $SkipWindows) {
     $cargoExe = Resolve-Exe -CommandName "cargo" -FallbackPaths @(
@@ -141,7 +150,22 @@ if (-not $SkipWindows) {
     if (-not (Test-Path $senderExe)) {
         throw "No se encontro binario sender: $senderExe"
     }
-    Copy-Item $senderExe (Join-Path $windowsOutDir "windows-sender.exe") -Force
+    Copy-Item $senderExe (Join-Path $senderOutDir "windows-sender.exe") -Force
+
+    if (Test-Path $receiverDir) {
+        Write-Host "Compilando windows-receiver (--release)..."
+        Push-Location $receiverDir
+        try {
+            & $cargoExe build --release
+        } finally {
+            Pop-Location
+        }
+        if (Test-Path $receiverExe) {
+            Copy-Item $receiverExe (Join-Path $receiverOutDir "windows-receiver.exe") -Force
+        } else {
+            Write-Warning "No se encontro windows-receiver.exe despues de compilar."
+        }
+    }
 }
 
 if (-not $SkipAndroid) {
@@ -192,9 +216,38 @@ if (-not $SkipAndroid) {
     }
 }
 
-Copy-Item (Join-Path $workspacePath "tools\launcher\start-audio-link.ps1") $toolsOutDir -Force
-Copy-Item (Join-Path $workspacePath "tools\launcher\stop-audio-link.ps1") $toolsOutDir -Force
-Copy-Item (Join-Path $workspacePath "tools\launcher\usb-watchdog.ps1") $toolsOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\launcher\start-audio-link.ps1") $launcherOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\launcher\stop-audio-link.ps1") $launcherOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\launcher\audio-link.ps1") $launcherOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\launcher\audio-link-ui.ps1") $launcherOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\launcher\audio-link-ui-legacy.ps1") $launcherOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\launcher\usb-watchdog.ps1") $launcherOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\launcher\start-android-mic.ps1") $launcherOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\launcher\stop-android-mic.ps1") $launcherOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\launcher\start-windows-mic-bridge.ps1") $launcherOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\launcher\stop-windows-mic-bridge.ps1") $launcherOutDir -Force
+Copy-Item (Join-Path $workspacePath "tools\web-ui\server.ps1") $webUiOutDir -Force
+if (Test-Path (Join-Path $workspacePath "audio-link.ps1")) {
+    Copy-Item (Join-Path $workspacePath "audio-link.ps1") $packageDir -Force
+}
+if (Test-Path (Join-Path $workspacePath "audio-link.cmd")) {
+    Copy-Item (Join-Path $workspacePath "audio-link.cmd") $packageDir -Force
+}
+if (Test-Path (Join-Path $workspacePath "audio-link-web.ps1")) {
+    Copy-Item (Join-Path $workspacePath "audio-link-web.ps1") $packageDir -Force
+}
+if (Test-Path (Join-Path $workspacePath "audio-link-web.cmd")) {
+    Copy-Item (Join-Path $workspacePath "audio-link-web.cmd") $packageDir -Force
+}
+if (Test-Path (Join-Path $workspacePath "audio-link-ui.ps1")) {
+    Copy-Item (Join-Path $workspacePath "audio-link-ui.ps1") $packageDir -Force
+}
+if (Test-Path (Join-Path $workspacePath "audio-link-ui.cmd")) {
+    Copy-Item (Join-Path $workspacePath "audio-link-ui.cmd") $packageDir -Force
+}
+if (Test-Path (Join-Path $workspacePath "tools\web-ui\public")) {
+    Copy-Item (Join-Path $workspacePath "tools\web-ui\public\*") $webUiPublicOutDir -Recurse -Force
+}
 Copy-Item (Join-Path $workspacePath "README.md") $packageDir -Force
 
 Write-Host "Paquete generado:"

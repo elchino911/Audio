@@ -1,8 +1,28 @@
-# Rust
-windows-sender/target/
+# Build outputs / packages
+dist/
+reports/
 
-# Android/Gradle
+# Temporary local files
+.dotnet/
+.tmp*.ps1
+
+# Rust
+**/target/
+
+# .NET
+windows-native-ui/bin/
+windows-native-ui/obj/
+
+# Android / Gradle / IDE
 android-receiver/.gradle/
 android-receiver/local.properties
 android-receiver/**/build/
+android-receiver/.idea/
 *.apk
+
+# Python
+__pycache__/
+*.pyc
+
+# Runtime/session logs
+tools/launcher/.runtime/

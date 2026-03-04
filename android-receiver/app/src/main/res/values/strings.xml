@@ -1,12 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Audio Receiver</string>
-    <string name="title">Windows -&gt; Android Audio</string>
-    <string name="port_label">Port</string>
-    <string name="jitter_label">Target jitter (ms)</string>
-    <string name="transport_label">Transport (udp/tcp)</string>
-    <string name="start">Start</string>
-    <string name="stop">Stop</string>
-    <string name="status_idle">Status: idle</string>
-    <string name="status_running">Status: running</string>
+    <string name="title">Audio Link Dashboard</string>
+
+    <string name="tab_receiver">Recepcion</string>
+    <string name="tab_sender">Envio</string>
+
+    <string name="port_label">Puerto</string>
+    <string name="jitter_label">Jitter objetivo (ms)</string>
+    <string name="transport_label">Transporte</string>
+    <string name="frame_label">Frame (ms)</string>
+    <string name="target_ip_label">IP destino (Windows)</string>
+    <string name="mic_source_label">Fuente de microfono</string>
+
+    <string name="rx_title">Windows -&gt; Android (Receptor)</string>
+    <string name="tx_title">Android Mic -&gt; Windows (Emisor)</string>
+
+    <string name="start_rx">Iniciar Receptor</string>
+    <string name="stop_rx">Detener Receptor</string>
+    <string name="start_tx">Iniciar Envio Mic</string>
+    <string name="stop_tx">Detener Envio Mic</string>
+
+    <string name="status_idle">Estado: inactivo</string>
+    <string name="status_running">Estado: receptor iniciado</string>
+    <string name="status_mic_running">Estado: envio de microfono iniciado</string>
+    <string name="status_mic_stopped">Estado: envio de microfono detenido</string>
+    <string name="status_mic_perm_needed">Estado: permiso RECORD_AUDIO/BT requerido</string>
+
+    <string name="status_rx_running">Receptor activo</string>
+    <string name="status_rx_stopped">Receptor detenido</string>
+    <string name="status_rx_detail_idle">Esperando inicio del receptor.</string>
+    <string name="status_rx_detail_fmt">Puerto %1$d, jitter %2$dms, transporte %3$s</string>
+
+    <string name="status_tx_running">Envio activo</string>
+    <string name="status_tx_stopped">Envio detenido</string>
+    <string name="status_tx_needs_permission">Permiso requerido</string>
+    <string name="status_tx_perm_detail">Concede permisos de microfono/Bluetooth para enviar audio.</string>
+    <string name="status_tx_invalid_target">IP destino invalida</string>
+    <string name="status_tx_invalid_target_detail">Define una IP de Windows valida para iniciar el envio.</string>
+    <string name="status_tx_detail_idle">Esperando inicio del emisor de microfono.</string>
+    <string name="status_tx_detail_fmt">Destino %1$s:%2$d, frame %3$dms, %4$s, modo %5$s</string>
 </resources>

@@ -36,6 +36,27 @@ function Invoke-LegacyUi {
     exit $LASTEXITCODE
 }
 
+function Invoke-LegacyUiIfAvailable {
+    param(
+        [string]$WorkspacePath,
+        [bool]$Headless,
+        [bool]$BuildOnly
+    )
+    $legacy = Join-Path $PSScriptRoot "audio-link-ui-legacy.ps1"
+    if (-not (Test-Path $legacy)) {
+        return $false
+    }
+
+    if ($BuildOnly) {
+        Write-Host "UI nativa no disponible. Se usara UI legacy."
+        exit 0
+    }
+
+    Write-Host "UI nativa no disponible. Abriendo UI legacy..."
+    Invoke-LegacyUi -WorkspacePath $WorkspacePath -Headless $Headless
+    return $true
+}
+
 function Resolve-Dotnet {
     $cmd = Get-Command "dotnet" -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
@@ -53,9 +74,30 @@ if ($HeadlessStatus) {
     exit $LASTEXITCODE
 }
 
+$portableExe = Join-Path $workspacePath "ui-native\AudioLinkNativeUI.exe"
+$packagedExe = Join-Path $workspacePath "dist\audio-link-native-ui\AudioLinkNativeUI.exe"
 $project = Join-Path $workspacePath "windows-native-ui\AudioLinkNativeUI.csproj"
 if (-not (Test-Path $project)) {
-    throw "No existe proyecto UI nativa: $project"
+    if (Test-Path $portableExe) {
+        Write-Host "UI nativa portable detectada: $portableExe"
+        if ($BuildOnly) {
+            exit 0
+        }
+        Start-Process -FilePath $portableExe -ArgumentList @("--workspace", $workspacePath)
+        exit 0
+    }
+    if (Test-Path $packagedExe) {
+        Write-Host "UI nativa publicada detectada: $packagedExe"
+        if ($BuildOnly) {
+            exit 0
+        }
+        Start-Process -FilePath $packagedExe -ArgumentList @("--workspace", $workspacePath)
+        exit 0
+    }
+    if (Invoke-LegacyUiIfAvailable -WorkspacePath $workspacePath -Headless ([bool]$HeadlessStatus) -BuildOnly ([bool]$BuildOnly)) {
+        exit 0
+    }
+    throw "No existe proyecto UI nativa ni fallback legacy: $project"
 }
 
 $publishDir = Join-Path $workspacePath "dist\audio-link-native-ui"
@@ -65,7 +107,7 @@ $dotnet = Resolve-Dotnet
 if (-not $NoBuild -or -not (Test-Path $exePath)) {
     New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
     Write-Host "Compilando UI nativa..."
-    & $dotnet publish $project -c $Configuration -r $Runtime --self-contained false -p:PublishSingleFile=true -o $publishDir
+    & $dotnet publish $project -c $Configuration -r $Runtime --self-contained false -p:PublishSingleFile=false -o $publishDir
     if ($LASTEXITCODE -ne 0) {
         throw "Fallo dotnet publish para UI nativa."
     }

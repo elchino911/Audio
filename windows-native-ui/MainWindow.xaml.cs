@@ -221,61 +221,58 @@ public partial class MainWindow : Window
             ValidateBeforeAction(action, profile);
 
             using var hardCts = new CancellationTokenSource(HardUiActionTimeout);
-            await Task.Run(async () =>
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(hardCts.Token);
+            cts.CancelAfter(GetActionTimeout(action) + TimeSpan.FromSeconds(5));
+            var args = BuildActionArgs(action, profile, forceUpStartAndroidMic);
+            CommandResult result;
+            string output;
+            try
             {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(hardCts.Token);
-                cts.CancelAfter(GetActionTimeout(action) + TimeSpan.FromSeconds(5));
-                var args = BuildActionArgs(action, profile, forceUpStartAndroidMic);
-                CommandResult result;
-                string output;
-                try
+                result = await _launcher.RunAudioLinkAsync(
+                    WorkspaceBox.Text.Trim(),
+                    args,
+                    GetActionTimeout(action),
+                    cts.Token);
+                output = result.OutputTrimmed;
+            }
+            catch (TimeoutException)
+            {
+                var applied = await VerifyStateAfterTimeoutAsync(action, profile);
+                if (!applied)
                 {
-                    result = await _launcher.RunAudioLinkAsync(
-                        WorkspaceBox.Text.Trim(),
-                        args,
-                        GetActionTimeout(action),
-                        cts.Token);
-                    output = result.OutputTrimmed;
+                    throw;
                 }
-                catch (TimeoutException)
+                AppendActionOutput($"Aviso: timeout esperando respuesta de script, pero el estado '{action}:{profile}' ya se aplico.");
+                await RefreshStatusAsync(logOutput: false);
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                var applied = await VerifyStateAfterTimeoutAsync(action, profile);
+                if (!applied)
                 {
-                    var applied = await VerifyStateAfterTimeoutAsync(action, profile);
-                    if (!applied)
-                    {
-                        throw;
-                    }
-                    AppendActionOutput($"Aviso: timeout esperando respuesta de script, pero el estado '{action}:{profile}' ya se aplico.");
-                    await RefreshStatusAsync(logOutput: false);
-                    return;
+                    throw new TimeoutException($"Tiempo agotado en accion {action}:{profile}.");
                 }
-                catch (OperationCanceledException)
-                {
-                    var applied = await VerifyStateAfterTimeoutAsync(action, profile);
-                    if (!applied)
-                    {
-                        throw new TimeoutException($"Tiempo agotado en accion {action}:{profile}.");
-                    }
-                    AppendActionOutput($"Aviso: accion {action}:{profile} se aplico pero la respuesta no llego a tiempo.");
-                    await RefreshStatusAsync(logOutput: false);
-                    return;
-                }
+                AppendActionOutput($"Aviso: accion {action}:{profile} se aplico pero la respuesta no llego a tiempo.");
+                await RefreshStatusAsync(logOutput: false);
+                return;
+            }
 
-                if (!result.Success)
-                {
-                    throw new InvalidOperationException(ExtractFriendlyError(output));
-                }
+            if (!result.Success)
+            {
+                throw new InvalidOperationException(ExtractFriendlyError(output));
+            }
 
-                if (!string.IsNullOrWhiteSpace(output))
-                {
-                    AppendActionOutput(output);
-                }
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                AppendActionOutput(output);
+            }
 
-                await RefreshStatusAsync(logOutput: false, cts.Token);
-                if (refreshLogs && _currentMode == UiMode.Advanced)
-                {
-                    await ReloadLogsAsync(logOutput: false, cts.Token);
-                }
-            }, hardCts.Token);
+            await RefreshStatusAsync(logOutput: false, cts.Token);
+            if (refreshLogs && _currentMode == UiMode.Advanced)
+            {
+                await ReloadLogsAsync(logOutput: false, cts.Token);
+            }
         }
         catch (TimeoutException ex)
         {
